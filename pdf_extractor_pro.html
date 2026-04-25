@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Nexus PDF AI | Intelligent Document Processing</title>
+  <title>PDF Extractor Tool | Intelligent Document Processing</title>
 
   <link
     href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@500;600;700&display=swap"
@@ -800,7 +800,7 @@
     <div class="brand">
       <div class="brand-icon"><i class="fa-solid fa-layer-group"></i></div>
       <div class="brand-text">
-        <h1>Nexus AI</h1>
+        <h1>PDF Extractor</h1>
         <p>Document Extraction</p>
       </div>
     </div>
@@ -933,7 +933,7 @@
               <p class="settings-desc">Choose whether to use Google's cloud AI (faster, requires API key) or a local
                 lightweight model via Ollama (completely private, requires Ollama running locally).</p>
               <select id="engine-select" class="select-field" style="width: 100%;" onchange="toggleSettings()">
-                <option value="gemini">Cloud: Google Gemini 1.5 Flash (Recommended)</option>
+                <option value="gemini">Cloud: Google Gemini 2.5 Flash (Recommended)</option>
                 <option value="ollama">Local: Ollama (Private & Lightweight)</option>
               </select>
             </div>
@@ -1007,7 +1007,8 @@
           <input type="text" id="modal-ollama-model" class="input-field" placeholder="Model (e.g. llama3.2)"
             value="llama3.2" style="width:100%; margin-bottom: 10px;">
           <p style="font-size: 12px; color: var(--text-secondary);">Ensure Ollama is running locally with
-            <br><code>OLLAMA_ORIGINS="*"</code> enabled.</p>
+            <br><code>OLLAMA_ORIGINS="*"</code> enabled.
+          </p>
         </div>
       </div>
       <div class="modal-footer">
@@ -1195,18 +1196,18 @@
 
     // Processing Logic (Gemini & Local)
     const PROMPT = `Extract structured data from the document. Return ONLY a valid JSON object matching exactly this schema, with no markdown code blocks formatting.
-{
-  "document_type": "Invoice|Receipt|Purchase Order|Bank Statement|Contract|Other",
-  "reference_number": "document/invoice/PO number",
-  "date": "issue date",
-  "vendor_name": "issuer/company name",
-  "client_name": "billed-to name",
-  "total": "final total amount",
-  "line_items": [
-    { "description": "item description", "quantity": "qty", "unit_price": "price", "amount": "line total" }
-  ]
-}
-If there are line items, list them. If none, leave array empty. Use empty strings for missing fields.`;
+    {
+      "document_type": "Invoice|Receipt|Purchase Order|Bank Statement|Contract|Other",
+      "reference_number": "document/invoice/PO number",
+      "date": "issue date",
+      "vendor_name": "issuer/company name",
+      "client_name": "billed-to name",
+      "total": "final total amount",
+      "line_items": [
+        { "description": "item description", "quantity": "qty", "unit_price": "price", "amount": "line total" }
+      ]
+    }
+    If there are line items, list them. If none, leave array empty. Use empty strings for missing fields.`;
 
     async function fileToBase64(file) {
       return new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result.split(',')[1]); r.onerror = rej; r.readAsDataURL(file); });

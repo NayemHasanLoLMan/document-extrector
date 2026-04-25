@@ -1,0 +1,6 @@
+{
+  "engine": "ollama",
+  "api_key": "AIzaSyAeEQ-QwIk7xeYP0PrKiruVudwxfFXAFw8",
+  "ollama_model": "llama3.2",
+  "inter_file_delay": 8
+}

@@ -1,0 +1,1418 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PDF Extractor Tool | Intelligent Document Processing</title>
+
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@500;600;700&display=swap"
+    rel="stylesheet">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <script>
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+  </script>
+
+  <style>
+    :root {
+      --bg-base: #030712;
+      --bg-surface: rgba(31, 41, 55, 0.4);
+      --bg-surface-hover: rgba(55, 65, 81, 0.6);
+      --border-color: rgba(255, 255, 255, 0.1);
+      --text-primary: #f9fafb;
+      --text-secondary: #9ca3af;
+      --text-muted: #6b7280;
+      --accent-gradient: linear-gradient(135deg, #4f46e5, #ec4899);
+      --accent-color: #6366f1;
+      --success-color: #10b981;
+      --danger-color: #ef4444;
+      --warning-color: #f59e0b;
+      --font-sans: 'Inter', sans-serif;
+      --font-display: 'Outfit', sans-serif;
+      --radius-md: 12px;
+      --radius-lg: 20px;
+      --radius-full: 9999px;
+      --shadow-glow: 0 0 20px rgba(99, 102, 241, 0.3);
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: var(--font-sans);
+      background-color: var(--bg-base);
+      color: var(--text-primary);
+      min-height: 100vh;
+      display: flex;
+      overflow: hidden;
+      background-image:
+        radial-gradient(circle at 15% 50%, rgba(79, 70, 229, 0.15), transparent 25%),
+        radial-gradient(circle at 85% 30%, rgba(236, 72, 153, 0.15), transparent 25%);
+    }
+
+    .glass {
+      background: var(--bg-surface);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid var(--border-color);
+    }
+
+    /* Sidebar */
+    .sidebar {
+      width: 280px;
+      height: 100vh;
+      border-right: 1px solid var(--border-color);
+      display: flex;
+      flex-direction: column;
+      padding: 24px;
+      background: rgba(3, 7, 18, 0.6);
+      backdrop-filter: blur(20px);
+      z-index: 10;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 40px;
+    }
+
+    .brand-icon {
+      width: 40px;
+      height: 40px;
+      border-radius: 12px;
+      background: var(--accent-gradient);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+      color: white;
+      box-shadow: var(--shadow-glow);
+    }
+
+    .brand-text h1 {
+      font-family: var(--font-display);
+      font-size: 22px;
+      font-weight: 700;
+      background: var(--accent-gradient);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .brand-text p {
+      font-size: 11px;
+      color: var(--text-secondary);
+      font-weight: 500;
+      text-transform: uppercase;
+    }
+
+    .nav-menu {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      flex: 1;
+    }
+
+    .nav-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 14px 18px;
+      border-radius: var(--radius-md);
+      color: var(--text-secondary);
+      text-decoration: none;
+      font-weight: 500;
+      font-size: 15px;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      border: 1px solid transparent;
+    }
+
+    .nav-item:hover {
+      color: var(--text-primary);
+      background: rgba(255, 255, 255, 0.05);
+    }
+
+    .nav-item.active {
+      color: white;
+      background: rgba(99, 102, 241, 0.15);
+      border: 1px solid rgba(99, 102, 241, 0.3);
+      box-shadow: inset 0 0 20px rgba(99, 102, 241, 0.1);
+    }
+
+    .nav-item i {
+      width: 20px;
+      text-align: center;
+      font-size: 18px;
+    }
+
+    .settings-btn {
+      margin-top: auto;
+    }
+
+    /* Main Content */
+    .main-content {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      overflow: hidden;
+      position: relative;
+    }
+
+    .header {
+      height: 80px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 40px;
+      border-bottom: 1px solid var(--border-color);
+      background: rgba(3, 7, 18, 0.4);
+      backdrop-filter: blur(10px);
+      z-index: 5;
+    }
+
+    .header-title {
+      font-family: var(--font-display);
+      font-size: 24px;
+      font-weight: 600;
+    }
+
+    .header-actions {
+      display: flex;
+      gap: 16px;
+    }
+
+    .btn {
+      padding: 10px 20px;
+      border-radius: var(--radius-md);
+      font-family: var(--font-sans);
+      font-weight: 600;
+      font-size: 14px;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      border: none;
+    }
+
+    .btn-outline {
+      background: transparent;
+      border: 1px solid var(--border-color);
+      color: var(--text-primary);
+    }
+
+    .btn-outline:hover:not(:disabled) {
+      background: rgba(255, 255, 255, 0.05);
+      border-color: rgba(255, 255, 255, 0.2);
+    }
+
+    .btn-primary {
+      background: var(--accent-gradient);
+      color: white;
+      box-shadow: 0 4px 15px rgba(99, 102, 241, 0.4);
+    }
+
+    .btn-primary:hover:not(:disabled) {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(99, 102, 241, 0.6);
+    }
+
+    .btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .content-area {
+      flex: 1;
+      padding: 40px;
+      overflow-y: auto;
+      scroll-behavior: smooth;
+    }
+
+    /* Views */
+    .view-section {
+      display: none;
+      animation: fadeIn 0.4s ease forwards;
+    }
+
+    .view-section.active {
+      display: block;
+    }
+
+    @keyframes fadeIn {
+      from {
+        opacity: 0;
+        transform: translateY(10px);
+      }
+
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    /* Upload View */
+    .dropzone {
+      border: 2px dashed rgba(99, 102, 241, 0.4);
+      border-radius: var(--radius-lg);
+      padding: 60px 40px;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      background: rgba(99, 102, 241, 0.05);
+      margin-bottom: 30px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .dropzone::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: var(--accent-gradient);
+      opacity: 0;
+      transition: opacity 0.3s ease;
+      z-index: 0;
+    }
+
+    .dropzone:hover,
+    .dropzone.dragover {
+      border-color: rgba(99, 102, 241, 0.8);
+      transform: scale(1.01);
+    }
+
+    .dropzone:hover::before,
+    .dropzone.dragover::before {
+      opacity: 0.05;
+    }
+
+    .dropzone-content {
+      position: relative;
+      z-index: 1;
+    }
+
+    .dz-icon {
+      font-size: 48px;
+      background: var(--accent-gradient);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin-bottom: 20px;
+    }
+
+    .dz-title {
+      font-size: 24px;
+      font-weight: 600;
+      margin-bottom: 10px;
+      font-family: var(--font-display);
+    }
+
+    .dz-subtitle {
+      color: var(--text-secondary);
+      font-size: 15px;
+      margin-bottom: 20px;
+    }
+
+    .tags {
+      display: flex;
+      gap: 10px;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+
+    .tag {
+      padding: 6px 14px;
+      border-radius: var(--radius-full);
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--border-color);
+      font-size: 12px;
+      color: var(--text-secondary);
+    }
+
+    .queue-container {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+      gap: 16px;
+    }
+
+    .file-item {
+      padding: 16px;
+      border-radius: var(--radius-md);
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      transition: transform 0.2s;
+    }
+
+    .file-item:hover {
+      transform: translateY(-2px);
+    }
+
+    .fi-icon {
+      width: 44px;
+      height: 44px;
+      border-radius: 10px;
+      background: rgba(255, 255, 255, 0.05);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+      color: var(--text-primary);
+    }
+
+    .fi-info {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .fi-name {
+      font-weight: 600;
+      font-size: 14px;
+      margin-bottom: 4px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .fi-meta {
+      font-size: 12px;
+      color: var(--text-secondary);
+    }
+
+    .status-badge {
+      padding: 4px 10px;
+      border-radius: var(--radius-full);
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+
+    .status-queued {
+      background: rgba(107, 114, 128, 0.2);
+      color: #9ca3af;
+    }
+
+    .status-processing {
+      background: rgba(99, 102, 241, 0.2);
+      color: #818cf8;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .status-processing::after {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: -100%;
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+      animation: shimmer 1.5s infinite;
+    }
+
+    @keyframes shimmer {
+      100% {
+        left: 100%;
+      }
+    }
+
+    .status-done {
+      background: rgba(16, 185, 129, 0.2);
+      color: #34d399;
+    }
+
+    .status-error {
+      background: rgba(239, 68, 68, 0.2);
+      color: #f87171;
+    }
+
+    .progress-section {
+      margin-bottom: 30px;
+      display: none;
+    }
+
+    .progress-header {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 10px;
+      font-size: 14px;
+      font-weight: 500;
+    }
+
+    .progress-track {
+      height: 8px;
+      background: rgba(255, 255, 255, 0.05);
+      border-radius: var(--radius-full);
+      overflow: hidden;
+    }
+
+    .progress-fill {
+      height: 100%;
+      background: var(--accent-gradient);
+      width: 0%;
+      transition: width 0.4s ease;
+      border-radius: var(--radius-full);
+    }
+
+    /* Data View */
+    .controls-bar {
+      display: flex;
+      gap: 16px;
+      margin-bottom: 24px;
+      flex-wrap: wrap;
+    }
+
+    .search-box {
+      flex: 1;
+      min-width: 300px;
+      position: relative;
+    }
+
+    .search-box i {
+      position: absolute;
+      left: 16px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: var(--text-secondary);
+    }
+
+    .input-field,
+    .select-field {
+      padding: 12px 16px;
+      border-radius: var(--radius-md);
+      background: rgba(0, 0, 0, 0.2);
+      border: 1px solid var(--border-color);
+      color: white;
+      font-family: var(--font-sans);
+      font-size: 14px;
+      transition: all 0.3s;
+    }
+
+    .input-field:focus,
+    .select-field:focus {
+      outline: none;
+      border-color: var(--accent-color);
+      box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2);
+    }
+
+    .select-field option {
+      background: var(--bg-base);
+    }
+
+    .table-container {
+      border-radius: var(--radius-lg);
+      overflow: auto;
+      max-height: calc(100vh - 240px);
+      border: 1px solid var(--border-color);
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      text-align: left;
+    }
+
+    th {
+      background: rgba(255, 255, 255, 0.03);
+      padding: 16px;
+      font-size: 12px;
+      text-transform: uppercase;
+      color: var(--text-secondary);
+      font-weight: 600;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      backdrop-filter: blur(10px);
+      border-bottom: 1px solid var(--border-color);
+      cursor: pointer;
+      white-space: nowrap;
+    }
+
+    th:hover {
+      color: white;
+      background: rgba(255, 255, 255, 0.05);
+    }
+
+    th.sort-asc::after {
+      content: ' \f0de';
+      font-family: 'Font Awesome 6 Free';
+      font-weight: 900;
+    }
+
+    th.sort-desc::after {
+      content: ' \f0dd';
+      font-family: 'Font Awesome 6 Free';
+      font-weight: 900;
+    }
+
+    td {
+      padding: 14px 16px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+      font-size: 14px;
+      max-width: 250px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    tbody tr {
+      transition: background 0.2s;
+    }
+
+    tbody tr:hover {
+      background: rgba(255, 255, 255, 0.03);
+    }
+
+    .pagination {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-top: 20px;
+    }
+
+    .page-info {
+      font-size: 14px;
+      color: var(--text-secondary);
+    }
+
+    /* Analytics View */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 20px;
+      margin-bottom: 30px;
+    }
+
+    .stat-card {
+      padding: 24px;
+      border-radius: var(--radius-lg);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .stat-card::after {
+      content: '';
+      position: absolute;
+      right: -20px;
+      top: -20px;
+      width: 100px;
+      height: 100px;
+      background: var(--accent-gradient);
+      filter: blur(50px);
+      opacity: 0.15;
+    }
+
+    .stat-value {
+      font-family: var(--font-display);
+      font-size: 36px;
+      font-weight: 700;
+      margin-bottom: 8px;
+    }
+
+    .stat-label {
+      font-size: 14px;
+      color: var(--text-secondary);
+      font-weight: 500;
+    }
+
+    .charts-grid {
+      display: grid;
+      grid-template-columns: 2fr 1fr;
+      gap: 20px;
+    }
+
+    .chart-card {
+      padding: 24px;
+      border-radius: var(--radius-lg);
+      height: 400px;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .chart-title {
+      font-family: var(--font-display);
+      font-size: 18px;
+      font-weight: 600;
+      margin-bottom: 20px;
+    }
+
+    .chart-wrapper {
+      flex: 1;
+      position: relative;
+    }
+
+    .empty-chart {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      color: var(--text-muted);
+      font-size: 14px;
+      border: 1px dashed var(--border-color);
+      border-radius: var(--radius-md);
+    }
+
+    /* Settings View */
+    .settings-container {
+      max-width: 600px;
+    }
+
+    .settings-group {
+      margin-bottom: 30px;
+    }
+
+    .settings-label {
+      display: block;
+      font-size: 14px;
+      font-weight: 500;
+      margin-bottom: 8px;
+      color: var(--text-secondary);
+    }
+
+    .settings-desc {
+      font-size: 13px;
+      color: var(--text-muted);
+      margin-bottom: 16px;
+      line-height: 1.5;
+    }
+
+    /* Setup Modal */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.8);
+      backdrop-filter: blur(8px);
+      z-index: 100;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      opacity: 0;
+      visibility: hidden;
+      transition: all 0.3s ease;
+    }
+
+    .modal-overlay.active {
+      opacity: 1;
+      visibility: visible;
+    }
+
+    .modal-content {
+      background: #0f172a;
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-lg);
+      padding: 40px;
+      width: 100%;
+      max-width: 500px;
+      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+      transform: translateY(20px);
+      transition: all 0.3s ease;
+    }
+
+    .modal-overlay.active .modal-content {
+      transform: translateY(0);
+    }
+
+    .modal-header {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      margin-bottom: 20px;
+    }
+
+    .modal-icon {
+      font-size: 32px;
+      background: var(--accent-gradient);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .modal-title {
+      font-family: var(--font-display);
+      font-size: 24px;
+      font-weight: 700;
+    }
+
+    .modal-body p {
+      color: var(--text-secondary);
+      margin-bottom: 20px;
+      line-height: 1.6;
+    }
+
+    .modal-footer {
+      margin-top: 30px;
+      display: flex;
+      justify-content: flex-end;
+    }
+
+    ::-webkit-scrollbar {
+      width: 8px;
+      height: 8px;
+    }
+
+    ::-webkit-scrollbar-track {
+      background: rgba(0, 0, 0, 0.1);
+    }
+
+    ::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 4px;
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+      background: rgba(255, 255, 255, 0.2);
+    }
+
+    .text-gradient {
+      background: var(--accent-gradient);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      font-weight: 700;
+    }
+
+    .mono {
+      font-family: 'Menlo', 'Monaco', 'Courier New', monospace;
+      font-size: 13px;
+      color: #a5b4fc;
+    }
+
+    .money {
+      font-weight: 600;
+      color: #34d399;
+    }
+  </style>
+</head>
+
+<body>
+
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="brand-icon"><i class="fa-solid fa-layer-group"></i></div>
+      <div class="brand-text">
+        <h1>PDF Extractor</h1>
+        <p>Document Extraction</p>
+      </div>
+    </div>
+
+    <nav class="nav-menu">
+      <a class="nav-item active" data-target="upload"><i class="fa-solid fa-cloud-arrow-up"></i> Upload & Process</a>
+      <a class="nav-item" data-target="data"><i class="fa-solid fa-table"></i> Data Explorer</a>
+      <a class="nav-item" data-target="analytics"><i class="fa-solid fa-chart-pie"></i> Analytics</a>
+      <a class="nav-item settings-btn" data-target="settings"><i class="fa-solid fa-gear"></i> Settings</a>
+    </nav>
+  </aside>
+
+  <main class="main-content">
+    <header class="header">
+      <div class="header-title" id="page-title">Upload & Process</div>
+      <div class="header-actions">
+        <button class="btn btn-outline" id="btn-clear" style="display:none" onclick="clearAll()"><i
+            class="fa-solid fa-trash-can"></i> Clear Data</button>
+        <button class="btn btn-outline" id="btn-csv" disabled onclick="exportData('csv')"><i
+            class="fa-solid fa-file-csv"></i> CSV</button>
+        <button class="btn btn-primary" id="btn-xl" disabled onclick="exportData('xlsx')"><i
+            class="fa-solid fa-file-excel"></i> Export to Excel</button>
+      </div>
+    </header>
+
+    <div class="content-area">
+
+      <section id="view-upload" class="view-section active">
+        <div class="dropzone" id="dropzone">
+          <input type="file" id="file-input" accept="application/pdf" multiple style="display:none">
+          <div class="dropzone-content">
+            <i class="fa-solid fa-file-pdf dz-icon"></i>
+            <div class="dz-title">Drag & Drop PDFs Here</div>
+            <div class="dz-subtitle">Or click to browse. AI processes them instantly based on your settings.</div>
+          </div>
+        </div>
+
+        <div class="queue-panel" style="margin-top: 30px;">
+          <div class="glass" style="border-radius: var(--radius-lg); padding: 20px;">
+            <div style="margin-bottom: 20px;">
+              <h4 style="color: var(--warning-color); margin-bottom: 10px; font-size: 14px;"><i
+                  class="fa-solid fa-spinner fa-spin"></i> Live Processing (<span id="q-processing-count">0</span>)</h4>
+              <ul id="q-processing" style="list-style: none; color: var(--text-secondary); font-size: 14px;">
+                <li style="color: var(--text-muted); font-style: italic;">No files currently processing.</li>
+              </ul>
+            </div>
+            <div>
+              <h4 style="color: var(--success-color); margin-bottom: 10px; font-size: 14px;"><i
+                  class="fa-solid fa-check"></i> Succeeded (<span id="q-success-count">0</span>)</h4>
+              <ul id="q-success" style="list-style: none; color: var(--text-secondary); font-size: 14px;">
+                <li style="color: var(--text-muted); font-style: italic;">No recent successes.</li>
+              </ul>
+            </div>
+            <div style="margin-top: 20px;">
+              <h4 style="color: var(--danger-color); margin-bottom: 10px; font-size: 14px;"><i
+                  class="fa-solid fa-triangle-exclamation"></i> Failed (<span id="q-failed-count">0</span>)</h4>
+              <ul id="q-failed" style="list-style: none; color: var(--text-secondary); font-size: 14px;">
+                <li style="color: var(--text-muted); font-style: italic;">No failed files.</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="view-data" class="view-section">
+        <div class="controls-bar">
+          <div class="search-box">
+            <i class="fa-solid fa-magnifying-glass"></i>
+            <input type="text" id="search-input" class="input-field" placeholder="Search fields..."
+              style="padding-left: 44px; width: 100%;">
+          </div>
+          <select id="type-filter" class="select-field">
+            <option value="">All Document Types</option>
+          </select>
+        </div>
+
+        <div class="table-container glass">
+          <table>
+            <thead>
+              <tr id="table-head"></tr>
+            </thead>
+            <tbody id="table-body">
+              <tr>
+                <td colspan="20" style="text-align:center; padding: 40px; color: var(--text-muted);">No data available.
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="pagination">
+          <button class="btn btn-outline" id="btn-prev" disabled><i class="fa-solid fa-chevron-left"></i>
+            Previous</button>
+          <div class="page-info" id="page-info">Page 1 of 1 · 0 rows</div>
+          <button class="btn btn-outline" id="btn-next" disabled>Next <i class="fa-solid fa-chevron-right"></i></button>
+        </div>
+      </section>
+
+      <section id="view-analytics" class="view-section">
+        <div class="stats-grid">
+          <div class="stat-card glass">
+            <div class="stat-value" id="stat-files">0</div>
+            <div class="stat-label">PDFs Processed</div>
+          </div>
+          <div class="stat-card glass">
+            <div class="stat-value" id="stat-rows">0</div>
+            <div class="stat-label">Total Line Items</div>
+          </div>
+          <div class="stat-card glass">
+            <div class="stat-value" id="stat-vendors">0</div>
+            <div class="stat-label">Unique Vendors</div>
+          </div>
+          <div class="stat-card glass">
+            <div class="stat-value text-gradient" id="stat-total">$0</div>
+            <div class="stat-label">Total Value</div>
+          </div>
+        </div>
+
+        <div class="charts-grid">
+          <div class="chart-card glass">
+            <div class="chart-title">Top Vendors by Amount</div>
+            <div class="chart-wrapper">
+              <div class="empty-chart" id="chart-vendor-empty">Upload PDFs to generate chart</div>
+              <canvas id="chart-vendor" style="display:none;"></canvas>
+            </div>
+          </div>
+          <div class="chart-card glass">
+            <div class="chart-title">Document Types</div>
+            <div class="chart-wrapper">
+              <div class="empty-chart" id="chart-type-empty">Upload PDFs</div>
+              <canvas id="chart-type" style="display:none;"></canvas>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="view-settings" class="view-section">
+        <div class="glass" style="padding: 40px; border-radius: var(--radius-lg);">
+          <h2 style="font-family: var(--font-display); font-size: 28px; margin-bottom: 30px;">Configuration</h2>
+
+          <div class="settings-container">
+            <div class="settings-group">
+              <label class="settings-label">Processing Engine</label>
+              <p class="settings-desc">Choose whether to use Google's cloud AI (faster, requires API key) or a local
+                lightweight model via Ollama (completely private, requires Ollama running locally).</p>
+              <select id="engine-select" class="select-field" style="width: 100%;" onchange="toggleSettings()">
+                <option value="gemini">Cloud: Google Gemini 2.5 Flash (Recommended)</option>
+                <option value="ollama">Local: Ollama (Private & Lightweight)</option>
+              </select>
+            </div>
+
+            <!-- Gemini Settings -->
+            <div id="settings-gemini" class="settings-group">
+              <label class="settings-label">Gemini API Key</label>
+              <div style="display: flex; gap: 10px;">
+                <input type="password" id="api-key-input" class="input-field" placeholder="AIzaSy..." style="flex:1;">
+                <button class="btn btn-primary" onclick="saveSettings()">Save Configuration</button>
+              </div>
+              <p style="margin-top: 10px; font-size: 13px;"><a href="https://aistudio.google.com/app/apikey"
+                  target="_blank" style="color: var(--accent-color);">Get a free Gemini API Key here</a></p>
+            </div>
+
+            <!-- Ollama Settings -->
+            <div id="settings-ollama" class="settings-group" style="display: none;">
+              <label class="settings-label">Ollama API URL</label>
+              <input type="text" id="ollama-url" class="input-field" value="http://localhost:11434"
+                style="width: 100%; margin-bottom: 15px;">
+
+              <label class="settings-label">Local Model Name</label>
+              <p class="settings-desc">Enter a lightweight model like <code>llama3.2</code> or <code>phi3</code> that
+                you have installed via Ollama.</p>
+              <input type="text" id="ollama-model" class="input-field" value="llama3.2"
+                style="width: 100%; margin-bottom: 15px;">
+
+              <div
+                style="background: rgba(245, 158, 11, 0.1); border-left: 3px solid var(--warning-color); padding: 15px; border-radius: 4px; font-size: 13px;">
+                <strong>Important:</strong> If the connection fails, you must run Ollama with CORS enabled:<br>
+                <code
+                  style="display: block; margin-top: 8px; background: rgba(0,0,0,0.3); padding: 8px; border-radius: 4px;">OLLAMA_ORIGINS="*" ollama serve</code>
+              </div>
+
+              <button class="btn btn-primary" onclick="saveSettings()" style="margin-top: 15px;">Save
+                Configuration</button>
+            </div>
+
+            <div class="settings-group">
+              <p class="settings-desc" id="status-text" style="color: var(--text-secondary); font-weight: 500;"></p>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <!-- Setup Modal -->
+  <div class="modal-overlay" id="setup-modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <i class="fa-solid fa-wand-magic-sparkles modal-icon"></i>
+        <div class="modal-title">Welcome to Nexus AI</div>
+      </div>
+      <div class="modal-body">
+        <p>To start extracting data, choose your AI processing engine:</p>
+        <select id="modal-engine" class="select-field" style="width: 100%; margin-bottom: 16px;"
+          onchange="toggleModalSettings()">
+          <option value="gemini">Google Gemini API (Faster, Highly Accurate)</option>
+          <option value="ollama">Ollama Local Model (Completely Private)</option>
+        </select>
+
+        <div id="modal-gemini-opts">
+          <input type="password" id="modal-api-key" class="input-field" placeholder="Enter Gemini API Key..."
+            style="width:100%; margin-bottom: 10px;">
+          <a href="https://aistudio.google.com/app/apikey" target="_blank"
+            style="color: var(--accent-color); font-size: 13px;">Need an API key? Get one for free.</a>
+        </div>
+
+        <div id="modal-ollama-opts" style="display:none;">
+          <input type="text" id="modal-ollama-model" class="input-field" placeholder="Model (e.g. llama3.2)"
+            value="llama3.2" style="width:100%; margin-bottom: 10px;">
+          <p style="font-size: 12px; color: var(--text-secondary);">Ensure Ollama is running locally with
+            <br><code>OLLAMA_ORIGINS="*"</code> enabled.
+          </p>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-outline" style="margin-right:12px;" onclick="closeModal()">Skip for now</button>
+        <button class="btn btn-primary" onclick="saveModalSettings()">Save & Continue</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // State Management
+    const State = {
+      queue: [], rows: [], filtered: [], isProcessing: false,
+      sortCol: -1, sortDir: 1, page: 1, pageSize: 25,
+      engine: 'gemini', apiKey: '', ollamaUrl: 'http://localhost:11434', ollamaModel: 'llama3.2'
+    };
+    const Charts = { vendor: null, type: null };
+
+    const COLS = [
+      { k: 'file_name', l: 'File Name', class: '' },
+      { k: 'doc_type', l: 'Doc Type', class: '' },
+      { k: 'ref_num', l: 'Reference #', class: 'mono' },
+      { k: 'order_id', l: 'Order ID', class: 'mono' },
+      { k: 'date', l: 'Date', class: '' },
+      { k: 'due_date', l: 'Due Date', class: '' },
+      { k: 'vendor_name', l: 'Vendor', class: '' },
+      { k: 'vendor_addr', l: 'Vendor Address', class: '' },
+      { k: 'vendor_contact', l: 'Vendor Contact', class: '' },
+      { k: 'client_name', l: 'Client', class: '' },
+      { k: 'client_addr', l: 'Client Address', class: '' },
+      { k: 'ship_to_address', l: 'Ship To', class: '' },
+      { k: 'ship_mode', l: 'Ship Mode', class: '' },
+      { k: 'currency', l: 'Currency', class: 'mono' },
+      { k: 'description', l: 'Line Description', class: '' },
+      { k: 'sku_category', l: 'SKU/Category', class: '' },
+      { k: 'quantity', l: 'Qty', class: 'mono' },
+      { k: 'unit_price', l: 'Unit Price', class: 'mono' },
+      { k: 'amount', l: 'Line Amount', class: 'mono' },
+      { k: 'subtotal', l: 'Subtotal', class: 'mono' },
+      { k: 'discount', l: 'Discount', class: 'mono' },
+      { k: 'shipping', l: 'Shipping', class: 'mono' },
+      { k: 'tax', l: 'Tax', class: 'mono' },
+      { k: 'tax_rate', l: 'Tax Rate', class: 'mono' },
+      { k: 'total', l: 'Total', class: 'money' },
+      { k: 'balance_due', l: 'Balance Due', class: 'money' },
+      { k: 'payment_terms', l: 'Payment Terms', class: '' },
+      { k: 'notes', l: 'Notes', class: '' },
+      { k: 'timestamp', l: 'Processed At', class: '' },
+    ];
+
+    document.addEventListener('DOMContentLoaded', () => {
+      initNavigation(); initDragAndDrop(); initTableHeaders(); initEventListeners();
+      fetchData();
+      setInterval(fetchData, 3000);
+      loadSettings();
+    });
+
+    // Settings & Configuration
+    function loadSettings() {
+      State.engine = localStorage.getItem('nexus_engine') || 'gemini';
+      State.apiKey = localStorage.getItem('nexus_gemini_key') || '';
+      State.ollamaUrl = localStorage.getItem('nexus_ollama_url') || 'http://localhost:11434';
+      State.ollamaModel = localStorage.getItem('nexus_ollama_model') || 'llama3.2';
+
+      document.getElementById('engine-select').value = State.engine;
+      document.getElementById('api-key-input').value = State.apiKey;
+      document.getElementById('ollama-url').value = State.ollamaUrl;
+      document.getElementById('ollama-model').value = State.ollamaModel;
+
+      toggleSettings();
+
+      if (State.engine === 'gemini' && !State.apiKey) {
+        document.getElementById('setup-modal').classList.add('active');
+      } else if (State.engine === 'ollama' && !State.ollamaModel) {
+        document.getElementById('setup-modal').classList.add('active');
+      } else {
+        // Automatically sync with backend if we have settings
+        try {
+          fetch('/api/settings', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ engine: State.engine, api_key: State.apiKey, ollama_url: State.ollamaUrl, ollama_model: State.ollamaModel })
+          });
+        } catch (e) { }
+      }
+      updateStatusText();
+    }
+
+    function toggleSettings() {
+      const engine = document.getElementById('engine-select').value;
+      document.getElementById('settings-gemini').style.display = engine === 'gemini' ? 'block' : 'none';
+      document.getElementById('settings-ollama').style.display = engine === 'ollama' ? 'block' : 'none';
+    }
+
+    function toggleModalSettings() {
+      const engine = document.getElementById('modal-engine').value;
+      document.getElementById('modal-gemini-opts').style.display = engine === 'gemini' ? 'block' : 'none';
+      document.getElementById('modal-ollama-opts').style.display = engine === 'ollama' ? 'block' : 'none';
+    }
+
+    async function saveSettings() {
+      State.engine = document.getElementById('engine-select').value;
+      State.apiKey = document.getElementById('api-key-input').value.trim();
+      State.ollamaUrl = document.getElementById('ollama-url').value.trim();
+      State.ollamaModel = document.getElementById('ollama-model').value.trim();
+
+      localStorage.setItem('nexus_engine', State.engine);
+      localStorage.setItem('nexus_gemini_key', State.apiKey);
+      localStorage.setItem('nexus_ollama_url', State.ollamaUrl);
+      localStorage.setItem('nexus_ollama_model', State.ollamaModel);
+
+      try {
+        await fetch('/api/settings', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ engine: State.engine, api_key: State.apiKey, ollama_url: State.ollamaUrl, ollama_model: State.ollamaModel })
+        });
+      } catch (e) {
+        console.error("Failed to update backend settings", e);
+      }
+
+      updateStatusText();
+      alert('Settings saved successfully!');
+    }
+
+    async function saveModalSettings() {
+      State.engine = document.getElementById('modal-engine').value;
+      if (State.engine === 'gemini') {
+        State.apiKey = document.getElementById('modal-api-key').value.trim();
+        localStorage.setItem('nexus_gemini_key', State.apiKey);
+      } else {
+        State.ollamaModel = document.getElementById('modal-ollama-model').value.trim();
+        localStorage.setItem('nexus_ollama_model', State.ollamaModel);
+      }
+      localStorage.setItem('nexus_engine', State.engine);
+
+      try {
+        await fetch('/api/settings', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ engine: State.engine, api_key: State.apiKey, ollama_model: State.ollamaModel })
+        });
+      } catch (e) { }
+
+      closeModal();
+      loadSettings();
+    }
+
+    function updateStatusText() {
+      const status = document.getElementById('status-text');
+      if (State.engine === 'gemini' && State.apiKey) {
+        status.innerHTML = '<span style="color:var(--success-color);"><i class="fa-solid fa-check"></i> Gemini Engine configured.</span>';
+      } else if (State.engine === 'ollama') {
+        status.innerHTML = '<span style="color:var(--success-color);"><i class="fa-solid fa-check"></i> Ollama Local Engine selected.</span>';
+      } else {
+        status.innerHTML = '<span style="color:var(--warning-color);"><i class="fa-solid fa-triangle-exclamation"></i> Configuration incomplete.</span>';
+      }
+    }
+
+    function closeModal() { document.getElementById('setup-modal').classList.remove('active'); }
+
+    // Navigation
+    function initNavigation() {
+      document.querySelectorAll('.nav-item').forEach(item => {
+        item.addEventListener('click', (e) => {
+          document.querySelectorAll('.nav-item').forEach(nav => nav.classList.remove('active'));
+          e.currentTarget.classList.add('active');
+          const target = e.currentTarget.dataset.target;
+          document.querySelectorAll('.view-section').forEach(view => view.classList.remove('active'));
+          document.getElementById('view-' + target).classList.add('active');
+
+          const titles = { 'upload': 'Upload & Process', 'data': 'Data Explorer', 'analytics': 'Analytics', 'settings': 'Configuration' };
+          document.getElementById('page-title').textContent = titles[target];
+
+          if (target === 'data') renderTable();
+          if (target === 'analytics') renderAnalytics();
+        });
+      });
+    }
+
+    // File Drag & Drop
+    function initDragAndDrop() {
+      const dz = document.getElementById('dropzone'), fi = document.getElementById('file-input');
+      dz.addEventListener('click', () => fi.click());
+      dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('dragover'); });
+      dz.addEventListener('dragleave', () => dz.classList.remove('dragover'));
+      dz.addEventListener('drop', e => { e.preventDefault(); dz.classList.remove('dragover'); handleFiles(e.dataTransfer.files); });
+      fi.addEventListener('change', e => { handleFiles(e.target.files); fi.value = ''; });
+    }
+
+    async function handleFiles(files) {
+      let newlyAdded = [];
+      for (let f of files) {
+        if (f.type === 'application/pdf' || f.name.toLowerCase().endsWith('.pdf')) {
+          newlyAdded.push({ file: { name: f.name, size: f.size }, status: 'processing', error: null });
+          const fd = new FormData();
+          fd.append('file', f);
+          try {
+            fetch('/api/upload', { method: 'POST', body: fd }).then(() => fetchData());
+          } catch (e) {
+            console.error("Upload failed", e);
+          }
+        }
+      }
+
+      if (newlyAdded.length > 0) {
+        State.queue = [...newlyAdded, ...State.queue];
+        updateQueueUI();
+      }
+    }
+
+    function updateQueueUI() {
+      const renderList = (elId, countId, items, color, emptyText, icon) => {
+        document.getElementById(countId).textContent = items.length;
+        const el = document.getElementById(elId);
+        if (items.length === 0) {
+          el.innerHTML = `<li style="color: var(--text-muted); font-style: italic;">${emptyText}</li>`;
+        } else {
+          el.innerHTML = items.map(f => `<li style="padding: 6px 0; border-bottom: 1px solid rgba(255,255,255,0.05); color: ${color};"><i class="fa-solid ${icon}"></i> ${f}</li>`).join('');
+        }
+      };
+
+      const processing = State.queue.filter(q => q.status === 'processing').map(q => q.file.name);
+      const queued = State.queue.filter(q => q.status === 'queued').map(q => q.file.name);
+      const done = State.queue.filter(q => q.status === 'done').map(q => q.file.name);
+      const failed = State.queue.filter(q => q.status === 'error').map(q => q.file.name);
+
+      // Combine processing + queued into the "Live Processing" list
+      const activeLabel = [...processing.map(f => `${f} ← extracting now`), ...queued.map(f => `${f} ← in queue`)];
+      renderList('q-processing', 'q-processing-count', activeLabel, 'var(--warning-color)', 'No files currently processing.', 'fa-file-pdf');
+      renderList('q-success', 'q-success-count', done, 'var(--success-color)', 'No recent successes.', 'fa-check');
+      renderList('q-failed', 'q-failed-count', failed, 'var(--danger-color)', 'No failed files.', 'fa-exclamation');
+    }
+
+    // Processing Logic (Gemini & Local)
+
+    async function fetchData() {
+      try {
+        const res = await fetch('/api/data');
+        if (res.ok) {
+          const data = await res.json();
+          if (data.length !== State.rows.length) {
+            State.rows = data;
+            updateGlobalData();
+            renderAnalytics();
+          }
+        }
+
+        const statusRes = await fetch('/api/status');
+        if (statusRes.ok) {
+          const statusData = await statusRes.json();
+
+          let newQueue = [];
+
+          // Files queued/waiting in inbox (not yet picked up)
+          statusData.processing.forEach(f => {
+            // Mark as 'processing' only if it's the currently active file, else 'queued'
+            const isActive = statusData.currently_processing === f;
+            newQueue.push({ file: { name: f }, status: isActive ? 'processing' : 'queued', error: null });
+          });
+
+          statusData.failed.forEach(f => {
+            newQueue.push({ file: { name: f }, status: 'error', error: 'Extraction failed' });
+          });
+          const doneFiles = [...new Set(State.rows.map(r => r.file_name))];
+          doneFiles.forEach(f => {
+            newQueue.push({ file: { name: f }, status: 'done', error: null });
+          });
+
+          State.queue = newQueue;
+
+          // Update engine status badge
+          const engineBadge = document.getElementById('engine-badge');
+          if (engineBadge) {
+            engineBadge.textContent = (statusData.engine || 'gemini').toUpperCase();
+          }
+
+          updateQueueUI();
+        }
+      } catch (e) {
+        console.error("Backend offline", e);
+      }
+    }
+
+
+    // Data Table
+    function initTableHeaders() { document.getElementById('table-head').innerHTML = COLS.map((c, i) => `<th onclick="sortTable(${i})">${c.l}</th>`).join(''); }
+    function initEventListeners() {
+      document.getElementById('search-input').addEventListener('input', applyFilters);
+      document.getElementById('type-filter').addEventListener('change', applyFilters);
+      document.getElementById('btn-prev').addEventListener('click', () => { State.page--; renderTable(); });
+      document.getElementById('btn-next').addEventListener('click', () => { State.page++; renderTable(); });
+    }
+
+    function updateGlobalData() {
+      applyFilters();
+      updateFilterDropdown();
+      document.getElementById('btn-csv').disabled = document.getElementById('btn-xl').disabled = State.rows.length === 0;
+      document.getElementById('btn-clear').style.display = (State.rows.length > 0 || State.queue.length > 0) ? 'inline-flex' : 'none';
+    }
+    function updateFilterDropdown() {
+      const types = [...new Set(State.rows.map(r => r.doc_type).filter(Boolean))].sort();
+      const sel = document.getElementById('type-filter'), cur = sel.value;
+      sel.innerHTML = '<option value="">All Types</option>' + types.map(t => `<option value="${escapeHTML(t)}">${escapeHTML(t)}</option>`).join('');
+      if (types.includes(cur)) sel.value = cur;
+    }
+
+    function applyFilters() {
+      const q = document.getElementById('search-input').value.toLowerCase().trim(), type = document.getElementById('type-filter').value;
+      State.filtered = State.rows.filter(r => {
+        if (type && r.doc_type !== type) return false;
+        if (!q) return true;
+        return Object.values(r).some(v => String(v).toLowerCase().includes(q));
+      });
+      State.page = 1; renderTable();
+    }
+
+    function sortTable(idx) {
+      const col = COLS[idx].k; State.sortDir = State.sortCol === idx ? State.sortDir * -1 : 1; State.sortCol = idx;
+      document.querySelectorAll('#table-head th').forEach(th => th.classList.remove('sort-asc', 'sort-desc'));
+      document.querySelectorAll('#table-head th')[idx].classList.add(State.sortDir === 1 ? 'sort-asc' : 'sort-desc');
+      State.filtered.sort((a, b) => String(a[col] || '').localeCompare(String(b[col] || '')) * State.sortDir);
+      State.page = 1; renderTable();
+    }
+
+    function renderTable() {
+      const tb = document.getElementById('table-body'), total = State.filtered.length;
+      if (total === 0) {
+        tb.innerHTML = '<tr><td colspan="20" style="text-align:center; padding: 40px; color: var(--text-muted);">No data found.</td></tr>';
+        document.getElementById('page-info').textContent = 'Page 1 of 1'; document.getElementById('btn-prev').disabled = document.getElementById('btn-next').disabled = true; return;
+      }
+      const pages = Math.ceil(total / State.pageSize); if (State.page > pages) State.page = pages;
+      const start = (State.page - 1) * State.pageSize;
+      tb.innerHTML = State.filtered.slice(start, start + State.pageSize).map(r => '<tr>' + COLS.map(c => `<td class="${c.class}" title="${escapeHTML(String(r[c.k] || ''))}">${escapeHTML(String(r[c.k] || ''))}</td>`).join('') + '</tr>').join('');
+      document.getElementById('page-info').textContent = `Page ${State.page} of ${pages}`;
+      document.getElementById('btn-prev').disabled = State.page <= 1; document.getElementById('btn-next').disabled = State.page >= pages;
+    }
+
+    function escapeHTML(str) { return str.replace(/[&<>'"]/g, t => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[t])); }
+
+    // Analytics
+    function renderAnalytics() {
+      const parseMoney = v => { const n = parseFloat(String(v).replace(/[^0-9.-]+/g, "")); return isNaN(n) ? 0 : n; };
+      let totalVal = 0; State.rows.forEach((r, i) => { if (r.total && (i === 0 || r.file_name !== State.rows[i - 1].file_name)) totalVal += parseMoney(r.total); });
+      document.getElementById('stat-files').textContent = State.queue.filter(q => q.status === 'done').length;
+      document.getElementById('stat-rows').textContent = State.rows.length;
+      document.getElementById('stat-vendors').textContent = new Set(State.rows.map(r => r.vendor_name).filter(Boolean)).size;
+      document.getElementById('stat-total').textContent = totalVal >= 1000 ? '$' + (totalVal / 1000).toFixed(1) + 'K' : '$' + Math.round(totalVal);
+
+      let vMap = {}; State.rows.forEach((r, i) => { if (r.vendor_name && r.total && (i === 0 || r.file_name !== State.rows[i - 1].file_name)) vMap[r.vendor_name] = (vMap[r.vendor_name] || 0) + parseMoney(r.total); });
+      let vData = Object.entries(vMap).sort((a, b) => b[1] - a[1]).slice(0, 5);
+      if (vData.length) {
+        document.getElementById('chart-vendor-empty').style.display = 'none'; const ctx = document.getElementById('chart-vendor'); ctx.style.display = 'block';
+        if (Charts.vendor) Charts.vendor.destroy();
+        Charts.vendor = new Chart(ctx, { type: 'bar', data: { labels: vData.map(d => d[0].substring(0, 15)), datasets: [{ data: vData.map(d => d[1]), backgroundColor: '#6366f1', borderRadius: 6 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } } });
+      }
+
+      let tMap = {}; State.rows.forEach(r => { if (r.doc_type) tMap[r.doc_type] = (tMap[r.doc_type] || 0) + 1; });
+      let tData = Object.entries(tMap);
+      if (tData.length) {
+        document.getElementById('chart-type-empty').style.display = 'none'; const ctx = document.getElementById('chart-type'); ctx.style.display = 'block';
+        if (Charts.type) Charts.type.destroy();
+        Charts.type = new Chart(ctx, { type: 'doughnut', data: { labels: tData.map(d => d[0]), datasets: [{ data: tData.map(d => d[1]), backgroundColor: ['#4f46e5', '#ec4899', '#10b981', '#f59e0b', '#06b6d4'], borderWidth: 0 }] }, options: { responsive: true, maintainAspectRatio: false, cutout: '75%' } });
+      }
+    }
+
+    // Export
+    function exportData(type) {
+      if (!State.rows.length) return;
+      const ws = XLSX.utils.aoa_to_sheet([COLS.map(c => c.l), ...State.rows.map(r => COLS.map(c => r[c.k] || ''))]);
+      const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "Data");
+      XLSX.writeFile(wb, `Export_${new Date().toISOString().slice(0, 10)}.${type}`);
+    }
+
+    async function clearAll() {
+      if (!confirm("Are you sure you want to clear all processing queues, processed files, and the entire database? This cannot be undone.")) return;
+      State.queue = []; State.rows = []; State.filtered = []; updateQueueUI(); updateGlobalData();
+      if (Charts.vendor) Charts.vendor.destroy(); if (Charts.type) Charts.type.destroy();
+      ['chart-vendor', 'chart-type'].forEach(id => document.getElementById(id).style.display = 'none');
+      ['chart-vendor-empty', 'chart-type-empty'].forEach(id => document.getElementById(id).style.display = 'flex');
+      document.getElementById('btn-clear').style.display = 'none';
+
+      try {
+        await fetch('/api/clear', { method: 'POST' });
+        alert("All data has been cleared!");
+      } catch (e) {
+        alert("Error clearing data from server.");
+      }
+    }
+  </script>
+</body>
+
+</html>

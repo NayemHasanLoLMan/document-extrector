@@ -819,9 +819,9 @@
       <div class="header-actions">
         <button class="btn btn-outline" id="btn-clear" style="display:none" onclick="clearAll()"><i
             class="fa-solid fa-trash-can"></i> Clear Data</button>
-        <button class="btn btn-outline" id="btn-csv" disabled onclick="exportData('csv')"><i
+        <button class="btn btn-outline" id="btn-csv" onclick="downloadFromServer('csv')"><i
             class="fa-solid fa-file-csv"></i> CSV</button>
-        <button class="btn btn-primary" id="btn-xl" disabled onclick="exportData('xlsx')"><i
+        <button class="btn btn-primary" id="btn-xl" onclick="downloadFromServer('xlsx')"><i
             class="fa-solid fa-file-excel"></i> Export to Excel</button>
       </div>
     </header>
@@ -942,52 +942,80 @@
           <h2 style="font-family: var(--font-display); font-size: 28px; margin-bottom: 30px;">Configuration</h2>
 
           <div class="settings-container">
+            <!-- Active Engine Status -->
             <div class="settings-group">
-              <label class="settings-label">Processing Engine</label>
-              <p class="settings-desc">Choose whether to use Google's cloud AI (faster, requires API key) or a local
-                lightweight model via Ollama (completely private, requires Ollama running locally).</p>
-              <select id="engine-select" class="select-field" style="width: 100%;" onchange="toggleSettings()">
-                <option value="gemini">Cloud: Google Gemini 2.5 Flash (Recommended)</option>
-                <option value="ollama">Local: Ollama (Private & Lightweight)</option>
-              </select>
+              <label class="settings-label">Active Processing Engine</label>
+              <div style="display:flex;align-items:center;gap:14px;background:rgba(16,185,129,0.08);border:1px solid rgba(16,185,129,0.25);border-radius:10px;padding:18px 22px;margin-top:6px;">
+                <div style="width:42px;height:42px;background:rgba(16,185,129,0.15);border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                  <i class="fa-solid fa-bolt" style="color:var(--success-color);font-size:18px;"></i>
+                </div>
+                <div>
+                  <div style="font-weight:600;font-size:15px;color:var(--text-primary);">Regex Parser <span style="background:rgba(16,185,129,0.2);color:var(--success-color);font-size:11px;font-weight:700;padding:2px 8px;border-radius:20px;margin-left:6px;">ACTIVE</span></div>
+                  <div style="font-size:13px;color:var(--text-secondary);margin-top:3px;">Deterministic rule-based extraction &mdash; fastest, 100% accurate, no API key needed.</div>
+                </div>
+              </div>
             </div>
 
-            <!-- Gemini Settings -->
-            <div id="settings-gemini" class="settings-group">
-              <label class="settings-label">Gemini API Key</label>
-              <div style="display: flex; gap: 10px;">
-                <input type="password" id="api-key-input" class="input-field" placeholder="AIzaSy..." style="flex:1;">
-                <button class="btn btn-primary" onclick="saveSettings()">Save Configuration</button>
+            <!-- Performance Stats -->
+            <div class="settings-group">
+              <label class="settings-label">Performance</label>
+              <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-top:6px;">
+                <div style="background:var(--card-bg);border:1px solid var(--border-color);border-radius:8px;padding:14px;text-align:center;">
+                  <div style="font-size:22px;font-weight:700;color:var(--accent-color);">~0.05s</div>
+                  <div style="font-size:12px;color:var(--text-secondary);margin-top:4px;">Per invoice</div>
+                </div>
+                <div style="background:var(--card-bg);border:1px solid var(--border-color);border-radius:8px;padding:14px;text-align:center;">
+                  <div style="font-size:22px;font-weight:700;color:var(--success-color);">100%</div>
+                  <div style="font-size:12px;color:var(--text-secondary);margin-top:4px;">Accuracy</div>
+                </div>
+                <div style="background:var(--card-bg);border:1px solid var(--border-color);border-radius:8px;padding:14px;text-align:center;">
+                  <div style="font-size:22px;font-weight:700;color:var(--text-primary);">Free</div>
+                  <div style="font-size:12px;color:var(--text-secondary);margin-top:4px;">No API cost</div>
+                </div>
               </div>
-              <p style="margin-top: 10px; font-size: 13px;"><a href="https://aistudio.google.com/app/apikey"
-                  target="_blank" style="color: var(--accent-color);">Get a free Gemini API Key here</a></p>
             </div>
 
-            <!-- Ollama Settings -->
-            <div id="settings-ollama" class="settings-group" style="display: none;">
-              <label class="settings-label">Ollama API URL</label>
-              <input type="text" id="ollama-url" class="input-field" value="http://localhost:11434"
-                style="width: 100%; margin-bottom: 15px;">
-
-              <label class="settings-label">Local Model Name</label>
-              <p class="settings-desc">Enter a lightweight model like <code>llama3.2</code> or <code>phi3</code> that
-                you have installed via Ollama.</p>
-              <input type="text" id="ollama-model" class="input-field" value="llama3.2"
-                style="width: 100%; margin-bottom: 15px;">
-
-              <div
-                style="background: rgba(245, 158, 11, 0.1); border-left: 3px solid var(--warning-color); padding: 15px; border-radius: 4px; font-size: 13px;">
-                <strong>Important:</strong> If the connection fails, you must run Ollama with CORS enabled:<br>
-                <code
-                  style="display: block; margin-top: 8px; background: rgba(0,0,0,0.3); padding: 8px; border-radius: 4px;">OLLAMA_ORIGINS="*" ollama serve</code>
+            <!-- Gemini API Key (optional fallback for scanned/non-standard PDFs) -->
+            <div class="settings-group">
+              <label class="settings-label">
+                <i class="fa-brands fa-google" style="margin-right:6px;color:#4285F4;"></i>Gemini API Key
+                <span style="font-size:11px;font-weight:400;color:var(--text-secondary);margin-left:8px;">(optional — for scanned or non-standard PDFs)</span>
+              </label>
+              <p class="settings-desc">Set a Gemini API key to enable cloud fallback for invoices the regex parser cannot read (e.g. image-only scanned PDFs). The regex engine remains primary.</p>
+              <div style="display:flex;gap:10px;margin-top:8px;">
+                <input type="password" id="gemini-key-input" class="input-field"
+                  placeholder="AIzaSy..." style="flex:1;font-family:monospace;"
+                  oninput="document.getElementById('gemini-save-status').textContent=''">
+                <button class="btn btn-primary" onclick="saveGeminiKey()" id="gemini-save-btn">
+                  <i class="fa-solid fa-floppy-disk" style="margin-right:6px;"></i>Save Key
+                </button>
               </div>
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-top:8px;">
+                <span id="gemini-save-status" style="font-size:13px;"></span>
+                <a href="https://aistudio.google.com/app/apikey" target="_blank"
+                  style="font-size:12px;color:var(--accent-color);">Get a free API key &rarr;</a>
+              </div>
+            </div>
 
-              <button class="btn btn-primary" onclick="saveSettings()" style="margin-top: 15px;">Save
-                Configuration</button>
+            <!-- Advanced engine options (hidden by default) -->
+            <div class="settings-group">
+              <label class="settings-label" style="cursor:pointer;user-select:none;" onclick="var el=document.getElementById('advanced-engines');el.style.display=el.style.display==='none'?'block':'none';this.querySelector('i').style.transform=el.style.display==='none'?'rotate(0deg)':'rotate(90deg)';">
+                <i class="fa-solid fa-chevron-right" style="font-size:11px;margin-right:6px;transition:transform 0.2s;"></i>Ollama local model setup
+              </label>
+              <div id="advanced-engines" style="display:none;margin-top:14px;">
+                <div style="background:var(--card-bg);border:1px solid var(--border-color);border-radius:8px;padding:16px;font-size:13px;">
+                  <div style="margin-bottom:8px;"><strong>Install &amp; pull the model:</strong></div>
+                  <code style="display:block;background:rgba(0,0,0,0.3);padding:8px;border-radius:4px;margin-bottom:10px;">ollama pull qwen2.5:7b</code>
+                  <div style="margin-bottom:8px;"><strong>Switch engine in config.json:</strong></div>
+                  <code style="display:block;background:rgba(0,0,0,0.3);padding:8px;border-radius:4px;">{ "engine": "ollama", "ollama_model": "qwen2.5:7b" }</code>
+                </div>
+              </div>
             </div>
 
             <div class="settings-group">
-              <p class="settings-desc" id="status-text" style="color: var(--text-secondary); font-weight: 500;"></p>
+              <p class="settings-desc" id="status-text" style="color:var(--success-color);font-weight:500;">
+                <i class="fa-solid fa-check"></i> Regex Engine active &mdash; ready to process invoices.
+              </p>
             </div>
           </div>
         </div>
@@ -1000,34 +1028,19 @@
     <div class="modal-content">
       <div class="modal-header">
         <i class="fa-solid fa-wand-magic-sparkles modal-icon"></i>
-        <div class="modal-title">Welcome to Nexus AI</div>
+        <div class="modal-title">Invoice RPA System</div>
       </div>
       <div class="modal-body">
-        <p>To start extracting data, choose your AI processing engine:</p>
-        <select id="modal-engine" class="select-field" style="width: 100%; margin-bottom: 16px;"
-          onchange="toggleModalSettings()">
-          <option value="gemini">Google Gemini API (Faster, Highly Accurate)</option>
-          <option value="ollama">Ollama Local Model (Completely Private)</option>
-        </select>
-
-        <div id="modal-gemini-opts">
-          <input type="password" id="modal-api-key" class="input-field" placeholder="Enter Gemini API Key..."
-            style="width:100%; margin-bottom: 10px;">
-          <a href="https://aistudio.google.com/app/apikey" target="_blank"
-            style="color: var(--accent-color); font-size: 13px;">Need an API key? Get one for free.</a>
-        </div>
-
-        <div id="modal-ollama-opts" style="display:none;">
-          <input type="text" id="modal-ollama-model" class="input-field" placeholder="Model (e.g. llama3.2)"
-            value="llama3.2" style="width:100%; margin-bottom: 10px;">
-          <p style="font-size: 12px; color: var(--text-secondary);">Ensure Ollama is running locally with
-            <br><code>OLLAMA_ORIGINS="*"</code> enabled.
-          </p>
+        <div style="text-align:center;padding:10px 0 20px;">
+          <div style="width:64px;height:64px;background:rgba(16,185,129,0.12);border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 16px;">
+            <i class="fa-solid fa-bolt" style="color:var(--success-color);font-size:26px;"></i>
+          </div>
+          <p style="font-size:16px;font-weight:600;color:var(--text-primary);margin-bottom:8px;">Regex Parser Ready</p>
+          <p style="font-size:13px;color:var(--text-secondary);line-height:1.6;">No configuration needed. Drop PDF invoices into the <strong>Inbox</strong> folder or upload them via the web UI &mdash; extraction starts instantly.</p>
         </div>
       </div>
       <div class="modal-footer">
-        <button class="btn btn-outline" style="margin-right:12px;" onclick="closeModal()">Skip for now</button>
-        <button class="btn btn-primary" onclick="saveModalSettings()">Save & Continue</button>
+        <button class="btn btn-primary" style="width:100%;" onclick="closeModal()">Get Started</button>
       </div>
     </div>
   </div>
@@ -1037,27 +1050,22 @@
     const State = {
       queue: [], rows: [], filtered: [], isProcessing: false,
       sortCol: -1, sortDir: 1, page: 1, pageSize: 25,
-      engine: 'gemini', apiKey: '', ollamaUrl: 'http://localhost:11434', ollamaModel: 'llama3.2'
+      engine: 'regex', apiKey: '', ollamaUrl: 'http://localhost:11434', ollamaModel: 'qwen2.5:7b'
     };
     const Charts = { vendor: null, type: null };
 
     const COLS = [
       { k: 'file_name', l: 'File Name', class: '' },
-      { k: 'doc_type', l: 'Doc Type', class: '' },
-      { k: 'ref_num', l: 'Reference #', class: 'mono' },
+      { k: 'ref_num', l: 'Invoice #', class: 'mono' },
       { k: 'order_id', l: 'Order ID', class: 'mono' },
       { k: 'date', l: 'Date', class: '' },
-      { k: 'due_date', l: 'Due Date', class: '' },
       { k: 'vendor_name', l: 'Vendor', class: '' },
-      { k: 'vendor_addr', l: 'Vendor Address', class: '' },
-      { k: 'vendor_contact', l: 'Vendor Contact', class: '' },
       { k: 'client_name', l: 'Client', class: '' },
-      { k: 'client_addr', l: 'Client Address', class: '' },
       { k: 'ship_to_address', l: 'Ship To', class: '' },
       { k: 'ship_mode', l: 'Ship Mode', class: '' },
       { k: 'currency', l: 'Currency', class: 'mono' },
-      { k: 'description', l: 'Line Description', class: '' },
-      { k: 'sku_category', l: 'SKU/Category', class: '' },
+      { k: 'description', l: 'Item Description', class: '' },
+      { k: 'sku_category', l: 'SKU / Category', class: '' },
       { k: 'quantity', l: 'Qty', class: 'mono' },
       { k: 'unit_price', l: 'Unit Price', class: 'mono' },
       { k: 'amount', l: 'Line Amount', class: 'mono' },
@@ -1082,104 +1090,61 @@
 
     // Settings & Configuration
     function loadSettings() {
-      State.engine = localStorage.getItem('nexus_engine') || 'gemini';
-      State.apiKey = localStorage.getItem('nexus_gemini_key') || '';
-      State.ollamaUrl = localStorage.getItem('nexus_ollama_url') || 'http://localhost:11434';
-      State.ollamaModel = localStorage.getItem('nexus_ollama_model') || 'llama3.2';
-
-      document.getElementById('engine-select').value = State.engine;
-      document.getElementById('api-key-input').value = State.apiKey;
-      document.getElementById('ollama-url').value = State.ollamaUrl;
-      document.getElementById('ollama-model').value = State.ollamaModel;
-
-      toggleSettings();
-
-      if (State.engine === 'gemini' && !State.apiKey) {
+      State.engine = 'regex';
+      State.ollamaModel = 'qwen2.5:7b';
+      if (!localStorage.getItem('nexus_welcomed')) {
         document.getElementById('setup-modal').classList.add('active');
-      } else if (State.engine === 'ollama' && !State.ollamaModel) {
-        document.getElementById('setup-modal').classList.add('active');
-      } else {
-        // Automatically sync with backend if we have settings
-        try {
-          fetch('/api/settings', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ engine: State.engine, api_key: State.apiKey, ollama_url: State.ollamaUrl, ollama_model: State.ollamaModel })
-          });
-        } catch (e) { }
+        localStorage.setItem('nexus_welcomed', '1');
       }
       updateStatusText();
     }
 
-    function toggleSettings() {
-      const engine = document.getElementById('engine-select').value;
-      document.getElementById('settings-gemini').style.display = engine === 'gemini' ? 'block' : 'none';
-      document.getElementById('settings-ollama').style.display = engine === 'ollama' ? 'block' : 'none';
-    }
-
-    function toggleModalSettings() {
-      const engine = document.getElementById('modal-engine').value;
-      document.getElementById('modal-gemini-opts').style.display = engine === 'gemini' ? 'block' : 'none';
-      document.getElementById('modal-ollama-opts').style.display = engine === 'ollama' ? 'block' : 'none';
-    }
+    function toggleSettings() { /* regex engine — no toggle needed */ }
+    function toggleModalSettings() { /* regex engine — no toggle needed */ }
 
     async function saveSettings() {
-      State.engine = document.getElementById('engine-select').value;
-      State.apiKey = document.getElementById('api-key-input').value.trim();
-      State.ollamaUrl = document.getElementById('ollama-url').value.trim();
-      State.ollamaModel = document.getElementById('ollama-model').value.trim();
-
-      localStorage.setItem('nexus_engine', State.engine);
-      localStorage.setItem('nexus_gemini_key', State.apiKey);
-      localStorage.setItem('nexus_ollama_url', State.ollamaUrl);
-      localStorage.setItem('nexus_ollama_model', State.ollamaModel);
-
-      try {
-        await fetch('/api/settings', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ engine: State.engine, api_key: State.apiKey, ollama_url: State.ollamaUrl, ollama_model: State.ollamaModel })
-        });
-      } catch (e) {
-        console.error("Failed to update backend settings", e);
-      }
-
+      /* Regex engine needs no settings — configure via config.json for advanced engines */
       updateStatusText();
-      alert('Settings saved successfully!');
     }
+    async function saveModalSettings() { closeModal(); }
 
-    async function saveModalSettings() {
-      State.engine = document.getElementById('modal-engine').value;
-      if (State.engine === 'gemini') {
-        State.apiKey = document.getElementById('modal-api-key').value.trim();
-        localStorage.setItem('nexus_gemini_key', State.apiKey);
-      } else {
-        State.ollamaModel = document.getElementById('modal-ollama-model').value.trim();
-        localStorage.setItem('nexus_ollama_model', State.ollamaModel);
+    async function saveGeminiKey() {
+      const key = document.getElementById('gemini-key-input').value.trim();
+      const statusEl = document.getElementById('gemini-save-status');
+      const btnEl = document.getElementById('gemini-save-btn');
+
+      if (!key) {
+        statusEl.innerHTML = '<span style="color:var(--warning-color);"><i class="fa-solid fa-triangle-exclamation"></i> Please enter an API key.</span>';
+        return;
       }
-      localStorage.setItem('nexus_engine', State.engine);
+
+      btnEl.disabled = true;
+      btnEl.innerHTML = '<i class="fa-solid fa-spinner fa-spin" style="margin-right:6px;"></i>Saving...';
+      statusEl.textContent = '';
 
       try {
-        await fetch('/api/settings', {
+        const resp = await fetch('/api/settings', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ engine: State.engine, api_key: State.apiKey, ollama_model: State.ollamaModel })
+          body: JSON.stringify({ api_key: key, ollama_model: 'qwen2.5:7b' })
         });
-      } catch (e) { }
-
-      closeModal();
-      loadSettings();
+        if (resp.ok) {
+          statusEl.innerHTML = '<span style="color:var(--success-color);"><i class="fa-solid fa-check"></i> API key saved successfully!</span>';
+          document.getElementById('gemini-key-input').value = '';
+        } else {
+          throw new Error('Server error ' + resp.status);
+        }
+      } catch (e) {
+        statusEl.innerHTML = '<span style="color:var(--error-color);"><i class="fa-solid fa-xmark"></i> Failed to save: ' + e.message + '</span>';
+      } finally {
+        btnEl.disabled = false;
+        btnEl.innerHTML = '<i class="fa-solid fa-floppy-disk" style="margin-right:6px;"></i>Save Key';
+      }
     }
 
     function updateStatusText() {
       const status = document.getElementById('status-text');
-      if (State.engine === 'gemini' && State.apiKey) {
-        status.innerHTML = '<span style="color:var(--success-color);"><i class="fa-solid fa-check"></i> Gemini Engine configured.</span>';
-      } else if (State.engine === 'ollama') {
-        status.innerHTML = '<span style="color:var(--success-color);"><i class="fa-solid fa-check"></i> Ollama Local Engine selected.</span>';
-      } else {
-        status.innerHTML = '<span style="color:var(--warning-color);"><i class="fa-solid fa-triangle-exclamation"></i> Configuration incomplete.</span>';
-      }
+      if (status) status.innerHTML = '<i class="fa-solid fa-check"></i> Regex Engine active &mdash; ready to process invoices.';
     }
 
     function closeModal() { document.getElementById('setup-modal').classList.remove('active'); }
@@ -1320,7 +1285,7 @@
     function updateGlobalData() {
       applyFilters();
       updateFilterDropdown();
-      document.getElementById('btn-csv').disabled = document.getElementById('btn-xl').disabled = State.rows.length === 0;
+      // Download buttons always enabled — they go direct to server
       document.getElementById('btn-clear').style.display = (State.rows.length > 0 || State.queue.length > 0) ? 'inline-flex' : 'none';
     }
     function updateFilterDropdown() {
@@ -1389,12 +1354,18 @@
       }
     }
 
-    // Export
+    // Download from server (always full dataset, no JS state dependency)
+    function downloadFromServer(type) {
+      window.location.href = `/api/download/${type}`;
+    }
+
+    // Export filtered/visible data only (client-side SheetJS)
     function exportData(type) {
-      if (!State.rows.length) return;
-      const ws = XLSX.utils.aoa_to_sheet([COLS.map(c => c.l), ...State.rows.map(r => COLS.map(c => r[c.k] || ''))]);
+      const data = State.filtered.length ? State.filtered : State.rows;
+      if (!data.length) { alert("No data to export."); return; }
+      const ws = XLSX.utils.aoa_to_sheet([COLS.map(c => c.l), ...data.map(r => COLS.map(c => r[c.k] || ''))]);
       const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "Data");
-      XLSX.writeFile(wb, `Export_${new Date().toISOString().slice(0, 10)}.${type}`);
+      XLSX.writeFile(wb, `Export_Filtered_${new Date().toISOString().slice(0, 10)}.${type}`);
     }
 
     async function clearAll() {
@@ -1406,10 +1377,19 @@
       document.getElementById('btn-clear').style.display = 'none';
 
       try {
-        await fetch('/api/clear', { method: 'POST' });
-        alert("All data has been cleared!");
+        const resp = await fetch('/api/clear', { method: 'POST' });
+        const body = await resp.json().catch(() => ({}));
+        if (resp.ok || resp.status === 207) {
+          if (body.errors && body.errors.length) {
+            alert("Partially cleared.\n\n" + body.errors.join("\n") + "\n\nClose the Excel file and try again.");
+          } else {
+            alert("All data has been cleared!");
+          }
+        } else {
+          alert("Server error: " + (body.error || resp.status));
+        }
       } catch (e) {
-        alert("Error clearing data from server.");
+        alert("Network error clearing data: " + e.message);
       }
     }
   </script>

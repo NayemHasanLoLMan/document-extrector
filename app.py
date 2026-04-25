@@ -17,12 +17,14 @@ FAILED_DIR    = BASE_DIR / "Failed"
 DATABASE_FILE = BASE_DIR / "Extracted_Database.csv"
 EXCEL_FILE    = BASE_DIR / "Extracted_Database.xlsx"
 
+# Must match HEADERS in rpa_bot.py exactly
 CSV_HEADERS = [
-    'Timestamp', 'File Name', 'Doc Type', 'Ref Number', 'Order ID', 'Date', 'Due Date',
-    'Vendor', 'Vendor Address', 'Vendor Contact',
-    'Client', 'Client Address', 'Ship To Address', 'Ship Mode', 'Currency',
-    'Total', 'Balance Due', 'Subtotal', 'Discount', 'Shipping', 'Tax', 'Tax Rate', 'Payment Terms',
-    'Line Description', 'SKU/Category', 'Qty', 'Unit Price', 'Line Amount', 'Notes'
+    'Timestamp', 'File Name',
+    'Invoice #', 'Order ID', 'Date',
+    'Vendor', 'Client', 'Ship To Address', 'Ship Mode',
+    'Currency', 'Subtotal', 'Discount', 'Shipping', 'Tax', 'Tax Rate', 'Total', 'Balance Due',
+    'Payment Terms', 'Notes',
+    'Item Description', 'SKU / Category', 'Qty', 'Unit Price', 'Line Amount',
 ]
 
 
@@ -46,35 +48,30 @@ def get_data():
     with open(DATABASE_FILE, 'r', encoding='utf-8') as f:
         for row in csv.DictReader(f):
             rows.append({
-                "timestamp":    row.get("Timestamp", ""),
-                "file_name":    row.get("File Name", ""),
-                "doc_type":     row.get("Doc Type", ""),
-                "ref_num":      row.get("Ref Number", ""),
-                "order_id":     row.get("Order ID", ""),
-                "date":         row.get("Date", ""),
-                "due_date":     row.get("Due Date", ""),
-                "vendor_name":  row.get("Vendor", ""),
-                "vendor_addr":  row.get("Vendor Address", ""),
-                "vendor_contact": row.get("Vendor Contact", ""),
-                "client_name":  row.get("Client", ""),
-                "client_addr":  row.get("Client Address", ""),
-                "ship_to_address": row.get("Ship To Address", ""),
-                "ship_mode":    row.get("Ship Mode", ""),
-                "currency":     row.get("Currency", ""),
-                "total":        row.get("Total", ""),
-                "balance_due":  row.get("Balance Due", ""),
-                "subtotal":     row.get("Subtotal", ""),
-                "discount":     row.get("Discount", ""),
-                "shipping":     row.get("Shipping", ""),
-                "tax":          row.get("Tax", ""),
-                "tax_rate":     row.get("Tax Rate", ""),
-                "payment_terms": row.get("Payment Terms", ""),
-                "description":  row.get("Line Description", ""),
-                "sku_category": row.get("SKU/Category", ""),
-                "quantity":     row.get("Qty", ""),
-                "unit_price":   row.get("Unit Price", ""),
-                "amount":       row.get("Line Amount", ""),
-                "notes":        row.get("Notes", ""),
+                "timestamp":        row.get("Timestamp", ""),
+                "file_name":        row.get("File Name", ""),
+                "ref_num":          row.get("Invoice #", ""),
+                "order_id":         row.get("Order ID", ""),
+                "date":             row.get("Date", ""),
+                "vendor_name":      row.get("Vendor", "SuperStore"),
+                "client_name":      row.get("Client", ""),
+                "ship_to_address":  row.get("Ship To Address", ""),
+                "ship_mode":        row.get("Ship Mode", ""),
+                "currency":         row.get("Currency", "USD"),
+                "subtotal":         row.get("Subtotal", ""),
+                "discount":         row.get("Discount", ""),
+                "shipping":         row.get("Shipping", ""),
+                "tax":              row.get("Tax", ""),
+                "tax_rate":         row.get("Tax Rate", ""),
+                "total":            row.get("Total", ""),
+                "balance_due":      row.get("Balance Due", ""),
+                "payment_terms":    row.get("Payment Terms", ""),
+                "notes":            row.get("Notes", ""),
+                "description":      row.get("Item Description", ""),
+                "sku_category":     row.get("SKU / Category", ""),
+                "quantity":         row.get("Qty", ""),
+                "unit_price":       row.get("Unit Price", ""),
+                "amount":           row.get("Line Amount", ""),
             })
     return jsonify(rows)
 
@@ -119,23 +116,42 @@ def upload_file():
     return jsonify({"success": True, "filename": file.filename})
 
 
-# ── Clear API (FIX #4: removed dead code after return) ───────────────────────
 @app.route('/api/clear', methods=['POST'])
 def clear_data():
-    # Reset CSV
-    with open(DATABASE_FILE, 'w', newline='', encoding='utf-8') as f:
-        csv.writer(f).writerow(CSV_HEADERS)
+    errors = []
 
-    # Reset Excel (FIX #8: no pandas required — use openpyxl directly)
+    # Reset CSV
+    try:
+        with open(DATABASE_FILE, 'w', newline='', encoding='utf-8') as f:
+            csv.writer(f).writerow(CSV_HEADERS)
+    except Exception as e:
+        errors.append(f"CSV reset failed: {e}")
+
+    # Reset Excel — write to a temp file first to avoid Windows file-lock errors
     try:
         from openpyxl import Workbook
+        import tempfile, shutil, os
+        tmp_fd, tmp_path = tempfile.mkstemp(suffix='.xlsx', dir=BASE_DIR)
+        os.close(tmp_fd)
         wb = Workbook()
         ws = wb.active
         ws.title = "Extracted Data"
         ws.append(CSV_HEADERS)
-        wb.save(EXCEL_FILE)
+        wb.save(tmp_path)
+        # On Windows, must delete the locked file before moving the new one in
+        try:
+            if EXCEL_FILE.exists():
+                os.remove(str(EXCEL_FILE))
+        except PermissionError:
+            os.remove(tmp_path)  # clean up temp
+            raise PermissionError("Excel file is open — please close it in Excel and click Clear again.")
+        shutil.move(tmp_path, str(EXCEL_FILE))
+    except PermissionError as e:
+        errors.append(str(e))
     except ImportError:
-        pass  # openpyxl not available — skip Excel reset
+        pass  # openpyxl not installed — skip Excel reset
+    except Exception as e:
+        errors.append(f"Excel reset failed: {e}")
 
     # Remove processed and failed files
     for folder in (PROCESSED_DIR, FAILED_DIR):
@@ -145,6 +161,8 @@ def clear_data():
             except OSError:
                 pass
 
+    if errors:
+        return jsonify({"success": False, "errors": errors}), 207  # partial success
     return jsonify({"success": True})
 
 

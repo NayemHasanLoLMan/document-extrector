@@ -1,6 +1,6 @@
 {
-  "engine": "ollama",
-  "api_key": "AIzaSyAeEQ-QwIk7xeYP0PrKiruVudwxfFXAFw8",
-  "ollama_model": "llama3.2",
-  "inter_file_delay": 8
+  "engine": "regex",
+  "api_key": "AIzaSyMockKey1234567890",
+  "ollama_model": "qwen2.5:7b",
+  "inter_file_delay": 2
 }

@@ -791,6 +791,45 @@
       font-weight: 600;
       color: #34d399;
     }
+    .status-duplicate {
+      background: rgba(245, 158, 11, 0.15);
+      color: #f59e0b;
+    }
+
+    .see-more-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      margin-top: 8px;
+      padding: 5px 14px;
+      border-radius: var(--radius-full);
+      border: 1px solid rgba(255,255,255,0.1);
+      background: rgba(255,255,255,0.04);
+      color: var(--text-secondary);
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .see-more-btn:hover {
+      background: rgba(255,255,255,0.08);
+      color: var(--text-primary);
+    }
+
+    .dup-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 2px 10px;
+      border-radius: var(--radius-full);
+      background: rgba(245, 158, 11, 0.15);
+      border: 1px solid rgba(245, 158, 11, 0.3);
+      color: #f59e0b;
+      font-size: 11px;
+      font-weight: 600;
+      margin-left: 8px;
+    }
   </style>
 </head>
 
@@ -861,6 +900,15 @@
                 <li style="color: var(--text-muted); font-style: italic;">No failed files.</li>
               </ul>
             </div>
+            <div id="dup-section" style="margin-top: 20px; display: none;">
+              <h4 style="color: #f59e0b; margin-bottom: 10px; font-size: 14px;">
+                <i class="fa-solid fa-copy"></i> Duplicates Skipped
+                (<span id="q-dupes-count">0</span>)
+                <span style="font-size:11px; font-weight:400; color:var(--text-muted); margin-left:6px;">already in database</span>
+              </h4>
+              <ul id="q-dupes" style="list-style: none; color: #f59e0b; font-size: 14px;"></ul>
+            </div>
+
           </div>
         </div>
       </section>
@@ -1170,56 +1218,138 @@
 
     // File Drag & Drop
     function initDragAndDrop() {
-      const dz = document.getElementById('dropzone'), fi = document.getElementById('file-input');
-      dz.addEventListener('click', () => fi.click());
+      const dz = document.getElementById('dropzone');
+      const fi = document.getElementById('file-input');
+
+      // Open file picker when clicking the dropzone (but NOT when the event
+      // originates from the hidden input itself, which would create a loop)
+      dz.addEventListener('click', (e) => {
+        if (e.target !== fi) fi.click();
+      });
+
       dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('dragover'); });
-      dz.addEventListener('dragleave', () => dz.classList.remove('dragover'));
-      dz.addEventListener('drop', e => { e.preventDefault(); dz.classList.remove('dragover'); handleFiles(e.dataTransfer.files); });
-      fi.addEventListener('change', e => { handleFiles(e.target.files); fi.value = ''; });
+      dz.addEventListener('dragleave', e => {
+        // Only remove if leaving the dropzone entirely (not entering a child)
+        if (!dz.contains(e.relatedTarget)) dz.classList.remove('dragover');
+      });
+      dz.addEventListener('drop', e => {
+        e.preventDefault();
+        dz.classList.remove('dragover');
+        handleFiles(e.dataTransfer.files);
+      });
+
+      fi.addEventListener('change', e => {
+        handleFiles(e.target.files);
+        fi.value = ''; // reset so same files can be re-selected if needed
+      });
     }
 
     async function handleFiles(files) {
-      let newlyAdded = [];
-      for (let f of files) {
-        if (f.type === 'application/pdf' || f.name.toLowerCase().endsWith('.pdf')) {
-          newlyAdded.push({ file: { name: f.name, size: f.size }, status: 'processing', error: null });
-          const fd = new FormData();
-          fd.append('file', f);
-          try {
-            fetch('/api/upload', { method: 'POST', body: fd }).then(() => fetchData());
-          } catch (e) {
-            console.error("Upload failed", e);
-          }
-        }
-      }
+      const pdfs = Array.from(files).filter(f =>
+        f.type === 'application/pdf' || f.name.toLowerCase().endsWith('.pdf')
+      );
+      if (!pdfs.length) return;
 
-      if (newlyAdded.length > 0) {
-        State.queue = [...newlyAdded, ...State.queue];
+      // Register all files in the queue immediately so the UI shows them at once
+      pdfs.forEach(f => {
+        if (!State.queue.find(q => q.file.name === f.name)) {
+          State.queue = [{ file: { name: f.name, size: f.size }, status: 'processing', error: null }, ...State.queue];
+        }
+      });
+      updateQueueUI();
+
+      // Upload all files in parallel
+      const uploads = pdfs.map(async f => {
+        const fd = new FormData();
+        fd.append('file', f);
+        try {
+          const resp = await fetch('/api/upload', { method: 'POST', body: fd });
+          const body = await resp.json().catch(() => ({}));
+
+          // Update the queue entry to reflect the real outcome
+          const idx = State.queue.findIndex(q => q.file.name === f.name);
+          if (resp.status === 409 && body.duplicate) {
+            if (idx !== -1) State.queue[idx].status = 'duplicate';
+          } else if (!resp.ok) {
+            if (idx !== -1) { State.queue[idx].status = 'error'; State.queue[idx].error = body.error || 'Upload failed'; }
+          }
+          // Success: leave as 'processing' — fetchData() will update to 'done'
+        } catch (e) {
+          console.error('Upload failed:', f.name, e);
+          const idx = State.queue.findIndex(q => q.file.name === f.name);
+          if (idx !== -1) { State.queue[idx].status = 'error'; State.queue[idx].error = 'Network error'; }
+        }
         updateQueueUI();
+      });
+
+      await Promise.allSettled(uploads);
+      fetchData();
+    }
+
+    const QUEUE_PAGE_SIZE = 10;
+
+    function renderCollapsibleList(elId, countId, items, color, emptyText, icon) {
+      document.getElementById(countId).textContent = items.length;
+      const el = document.getElementById(elId);
+      if (items.length === 0) {
+        el.innerHTML = `<li style="color: var(--text-muted); font-style: italic;">${emptyText}</li>`;
+        return;
       }
+      const visible = items.slice(0, QUEUE_PAGE_SIZE);
+      const hidden  = items.slice(QUEUE_PAGE_SIZE);
+      const makeItem = name => `<li style="padding: 6px 0; border-bottom: 1px solid rgba(255,255,255,0.05); color: ${color}; display:flex; align-items:center; gap:8px;"><i class="fa-solid ${icon}"></i><span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${escapeHTML(name)}">${escapeHTML(name)}</span></li>`;
+
+      let html = visible.map(makeItem).join('');
+
+      if (hidden.length > 0) {
+        const toggleId = `toggle-${elId}`;
+        const hiddenId = `hidden-${elId}`;
+        html += `<div id="${hiddenId}" style="display:none;">${hidden.map(makeItem).join('')}</div>`;
+        html += `<button class="see-more-btn" id="${toggleId}" onclick="toggleSeeMore('${hiddenId}','${toggleId}',${hidden.length})">
+          <i class="fa-solid fa-chevron-down" style="font-size:10px;"></i> See ${hidden.length} more
+        </button>`;
+      }
+      el.innerHTML = html;
+    }
+
+    function toggleSeeMore(hiddenId, btnId, count) {
+      const hidden = document.getElementById(hiddenId);
+      const btn    = document.getElementById(btnId);
+      const isOpen = hidden.style.display !== 'none';
+      hidden.style.display = isOpen ? 'none' : 'block';
+      btn.innerHTML = isOpen
+        ? `<i class="fa-solid fa-chevron-down" style="font-size:10px;"></i> See ${count} more`
+        : `<i class="fa-solid fa-chevron-up" style="font-size:10px;"></i> Show less`;
     }
 
     function updateQueueUI() {
-      const renderList = (elId, countId, items, color, emptyText, icon) => {
-        document.getElementById(countId).textContent = items.length;
-        const el = document.getElementById(elId);
-        if (items.length === 0) {
-          el.innerHTML = `<li style="color: var(--text-muted); font-style: italic;">${emptyText}</li>`;
-        } else {
-          el.innerHTML = items.map(f => `<li style="padding: 6px 0; border-bottom: 1px solid rgba(255,255,255,0.05); color: ${color};"><i class="fa-solid ${icon}"></i> ${f}</li>`).join('');
-        }
-      };
-
       const processing = State.queue.filter(q => q.status === 'processing').map(q => q.file.name);
-      const queued = State.queue.filter(q => q.status === 'queued').map(q => q.file.name);
-      const done = State.queue.filter(q => q.status === 'done').map(q => q.file.name);
-      const failed = State.queue.filter(q => q.status === 'error').map(q => q.file.name);
+      const queued     = State.queue.filter(q => q.status === 'queued').map(q => q.file.name);
+      const done       = State.queue.filter(q => q.status === 'done').map(q => q.file.name);
+      const failed     = State.queue.filter(q => q.status === 'error').map(q => q.file.name);
+      const dupes      = State.queue.filter(q => q.status === 'duplicate').map(q => q.file.name);
 
-      // Combine processing + queued into the "Live Processing" list
-      const activeLabel = [...processing.map(f => `${f} ← extracting now`), ...queued.map(f => `${f} ← in queue`)];
-      renderList('q-processing', 'q-processing-count', activeLabel, 'var(--warning-color)', 'No files currently processing.', 'fa-file-pdf');
-      renderList('q-success', 'q-success-count', done, 'var(--success-color)', 'No recent successes.', 'fa-check');
-      renderList('q-failed', 'q-failed-count', failed, 'var(--danger-color)', 'No failed files.', 'fa-exclamation');
+      // Combine processing + queued
+      const activeLabel = [
+        ...processing.map(f => `${f} ← extracting now`),
+        ...queued.map(f => `${f} ← in queue`),
+      ];
+      renderCollapsibleList('q-processing', 'q-processing-count', activeLabel,
+        'var(--warning-color)', 'No files currently processing.', 'fa-file-pdf');
+      renderCollapsibleList('q-success', 'q-success-count', done,
+        'var(--success-color)', 'No recent successes.', 'fa-check');
+      renderCollapsibleList('q-failed', 'q-failed-count', failed,
+        'var(--danger-color)', 'No failed files.', 'fa-exclamation');
+
+      // Duplicate section
+      const dupEl    = document.getElementById('q-dupes');
+      const dupCount = document.getElementById('q-dupes-count');
+      const dupSec   = document.getElementById('dup-section');
+      if (dupEl && dupCount && dupSec) {
+        dupSec.style.display = dupes.length > 0 ? 'block' : 'none';
+        renderCollapsibleList('q-dupes', 'q-dupes-count', dupes,
+          '#f59e0b', '', 'fa-copy');
+      }
     }
 
     // Processing Logic (Gemini & Local)

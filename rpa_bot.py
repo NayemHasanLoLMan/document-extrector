@@ -12,6 +12,9 @@ from pathlib import Path
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 
+from audit_log import audit
+from notifier import notify_human_review, load_notification_config
+
 try:
     import requests
     from pypdf import PdfReader
@@ -63,18 +66,30 @@ def load_config():
                 GEMINI_API_KEY = cfg.get("api_key", "")
             OLLAMA_MODEL     = cfg.get("ollama_model", OLLAMA_MODEL)
             INTER_FILE_DELAY = cfg.get("inter_file_delay", INTER_FILE_DELAY)
+            # Load notification config into notifier module
+            load_notification_config(cfg)
             log.info(f"Config loaded  engine={ENGINE}  key={'SET' if GEMINI_API_KEY else 'NOT SET'}")
+            audit.log_event("CONFIG_LOADED", engine=ENGINE, inter_file_delay=INTER_FILE_DELAY)
         except Exception as exc:
             log.warning(f"Could not read config.json: {exc}")
 
 def save_config():
+    """Write all settings back to config.json, preserving schedule/notifications sections."""
     try:
-        CONFIG_FILE.write_text(json.dumps({
+        # Load existing to preserve schedule + notifications blocks
+        existing: dict = {}
+        if CONFIG_FILE.exists():
+            try:
+                existing = json.loads(CONFIG_FILE.read_text(encoding='utf-8'))
+            except Exception:
+                pass
+        existing.update({
             "engine":           ENGINE,
             "api_key":          GEMINI_API_KEY,
             "ollama_model":     OLLAMA_MODEL,
             "inter_file_delay": INTER_FILE_DELAY,
-        }, indent=2), encoding='utf-8')
+        })
+        CONFIG_FILE.write_text(json.dumps(existing, indent=2), encoding='utf-8')
     except Exception as exc:
         log.warning(f"Could not save config.json: {exc}")
 
@@ -764,17 +779,59 @@ def setup_environment():
             log.warning("google-generativeai not installed. pip install google-generativeai")
 
 
+# ─── DUPLICATE DETECTION ──────────────────────────────────────────────────────
+def is_duplicate(file_name: str) -> bool:
+    """
+    Return True if *file_name* already has a row in Extracted_Database.csv
+    OR already exists in the Processed/ folder.
+    Both checks are needed because the CSV may be cleared without moving
+    files back, or vice-versa.
+    """
+    # 1. Check Processed/ directory
+    if (PROCESSED_DIR / file_name).exists():
+        return True
+    # 2. Check CSV (column index 1 = 'File Name')
+    if not DATABASE_FILE.exists():
+        return False
+    try:
+        with _csv_lock:
+            with open(DATABASE_FILE, 'r', encoding='utf-8') as f:
+                reader = csv.reader(f)
+                next(reader, None)          # skip header
+                for row in reader:
+                    if len(row) > 1 and row[1].strip() == file_name.strip():
+                        return True
+    except Exception:
+        pass
+    return False
+
+
 # ─── MAIN FILE HANDLER ────────────────────────────────────────────────────────
 def handle_new_file(file_path: Path):
     file_path = Path(file_path)
     if file_path.suffix.lower() != '.pdf' or not file_path.exists():
         return
 
+    # ── Duplicate guard ────────────────────────────────────────────────────────
+    if is_duplicate(file_path.name):
+        log.warning(f"DUPLICATE — '{file_path.name}' already processed. Skipping & removing from Inbox.")
+        audit.log_event("FILE_DUPLICATE_SKIPPED", file=file_path.name,
+                        reason="Already in Processed/ or CSV database")
+        try:
+            file_path.unlink()          # remove from Inbox so it doesn't accumulate
+        except Exception:
+            pass
+        return
+
     log.info(f"─── Processing: {file_path.name} ───")
+    audit.log_event("FILE_PROCESSING_START", file=file_path.name, engine=ENGINE)
 
     if not wait_for_file_stable(file_path):
+        reason = "Timeout waiting for file to become stable"
         log.error(f"Timeout waiting for file: {file_path.name}")
+        audit.extraction_fail(file=file_path.name, error=reason)
         _move_to(file_path, FAILED_DIR)
+        notify_human_review(file_name=file_path.name, reason=reason)
         return
 
     global currently_processing
@@ -783,7 +840,9 @@ def handle_new_file(file_path: Path):
 
     try:
         if not is_configured():
+            reason = "Bot not configured — engine/api_key missing in config.json"
             log.error(f"Not configured — skipping '{file_path.name}'. Set engine/api_key in config.json.")
+            audit.log_event("FILE_SKIPPED", file=file_path.name, reason=reason)
             with processing_lock:
                 currently_processing = None
             return
@@ -808,10 +867,20 @@ def handle_new_file(file_path: Path):
                        if i.get("description") and i["description"] != "(see document)"])
         log.info(f"✔ Done: '{file_path.name}' | Invoice #{data.get('reference_number','')} "
                  f"| {n_items} line item(s) | Total: {data.get('total','')}\n")
+        audit.extraction_ok(
+            file=file_path.name,
+            engine=ENGINE,
+            invoice=data.get("reference_number", ""),
+            total=data.get("total", ""),
+            items=n_items,
+        )
 
     except Exception as exc:
+        reason = str(exc)
         log.error(f"✘ Failed '{file_path.name}': {exc}\n")
+        audit.extraction_fail(file=file_path.name, error=reason)
         _move_to(file_path, FAILED_DIR)
+        notify_human_review(file_name=file_path.name, reason=reason)
 
     finally:
         with processing_lock:
@@ -841,7 +910,9 @@ def _queue_worker():
 
 
 def enqueue_file(file_path):
-    _file_queue.put(Path(file_path))
+    p = Path(file_path)
+    audit.file_queued(file=p.name)
+    _file_queue.put(p)
 
 
 # ─── WATCHDOG ─────────────────────────────────────────────────────────────────

@@ -6,6 +6,9 @@ from flask_cors import CORS
 from pathlib import Path
 
 import rpa_bot
+from audit_log import audit
+from scheduler import init_scheduler, get_scheduler_status, shutdown_scheduler
+import notifier as _notifier
 
 app  = Flask(__name__)
 CORS(app)
@@ -108,12 +111,23 @@ def upload_file():
     if not file.filename.lower().endswith('.pdf'):
         return jsonify({"error": "Only PDF files are accepted"}), 400
 
+    # ── Duplicate guard — check before writing to disk ────────────────────────
+    if rpa_bot.is_duplicate(file.filename):
+        audit.log_event("UPLOAD_DUPLICATE_REJECTED", file=file.filename,
+                        reason="Already in Processed/ folder or CSV database")
+        return jsonify({
+            "error": f"Duplicate: '{file.filename}' has already been processed.",
+            "duplicate": True,
+            "filename": file.filename,
+        }), 409
+
     dest = INBOX_DIR / file.filename
     file.save(str(dest))
 
     # Enqueue immediately so watchdog is not needed for uploads
     rpa_bot.enqueue_file(dest)
     return jsonify({"success": True, "filename": file.filename})
+
 
 
 @app.route('/api/clear', methods=['POST'])
@@ -226,20 +240,89 @@ def update_settings():
     })
 
 
+@app.route('/api/settings/notifications', methods=['POST'])
+def update_notifications():
+    """Update email notification settings at runtime."""
+    body = request.json or {}
+    import json
+    cfg_path = BASE_DIR / "config.json"
+    existing: dict = {}
+    if cfg_path.exists():
+        try:
+            existing = json.loads(cfg_path.read_text(encoding='utf-8'))
+        except Exception:
+            pass
+    existing["notifications"] = {
+        **existing.get("notifications", {}),
+        **body,
+    }
+    cfg_path.write_text(json.dumps(existing, indent=2), encoding='utf-8')
+    _notifier.load_notification_config(existing)
+    audit.log_event("NOTIFICATIONS_UPDATED",
+                    enabled=existing["notifications"].get("enabled"),
+                    smtp_user=existing["notifications"].get("smtp_user", ""))
+    return jsonify({"success": True,
+                    "notifications": existing["notifications"]})
+
+
+# ── Audit Log API ─────────────────────────────────────────────────────────────────────────────────────
+@app.route('/api/audit-log', methods=['GET'])
+def get_audit_log():
+    """Return the last N audit events as JSON."""
+    n = min(int(request.args.get('n', 500)), 2000)
+    events = audit.read_recent(n)
+    return jsonify(events)
+
+
+@app.route('/api/audit-log/download', methods=['GET'])
+def download_audit_log():
+    """Download the raw audit.log file."""
+    log_dir = BASE_DIR / "logs"
+    if not (log_dir / "audit.log").exists():
+        return jsonify({"error": "No audit log yet"}), 404
+    return send_from_directory(log_dir, "audit.log", as_attachment=True)
+
+
+# ── Scheduler Status API ───────────────────────────────────────────────────────────────────────────────
+@app.route('/api/scheduler-status', methods=['GET'])
+def get_scheduler_status_api():
+    return jsonify(get_scheduler_status())
+
+
 # ── Startup ───────────────────────────────────────────────────────────────────
 if __name__ == '__main__':
-    # FIX #5: setup_environment called only once here; start_bot calls it too
-    # but it is idempotent (mkdir exist_ok + file-exists check), so no harm.
     rpa_bot.setup_environment()
 
     # Start the RPA Bot (watchdog + worker queue) in a background daemon thread
     bot_thread = threading.Thread(target=rpa_bot.start_bot, name="rpa-bot", daemon=True)
     bot_thread.start()
 
+    # Load full config so schedule/notifications sections are available
+    import json as _json
+    _cfg: dict = {}
+    _cfg_path = BASE_DIR / "config.json"
+    if _cfg_path.exists():
+        try:
+            _cfg = _json.loads(_cfg_path.read_text(encoding='utf-8'))
+        except Exception:
+            pass
+
+    # Start the APScheduler (background — no separate process needed)
+    init_scheduler(
+        inbox_dir    = INBOX_DIR,
+        failed_dir   = FAILED_DIR,
+        enqueue_fn   = rpa_bot.enqueue_file,
+        notify_fn    = _notifier.notify_human_review,
+        schedule_cfg = _cfg.get("schedule", {}),
+    )
+
+    audit.log_event("SERVER_START", host="0.0.0.0", port=5000)
+
     print("\n" + "="*55)
     print("  PDF -> Excel RPA System")
-    print("  Web UI  ->  http://localhost:5000")
+    print("  Web UI    ->  http://localhost:5000")
+    print("  Audit log ->  logs/audit.log")
     print("  Drop PDFs into the Inbox/ folder to process")
     print("="*55 + "\n")
 
-    app.run(host='0.0.0.0', port=5000, debug=False, use_reloader=False)
+    app.run(host='0.0.0.0', port=5000, debug=False, use_reloader=False)

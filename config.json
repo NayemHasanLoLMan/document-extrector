@@ -1,6 +1,22 @@
 {
   "engine": "regex",
-  "api_key": "AIzaSyMockKey1234567890",
+  "api_key": "",
   "ollama_model": "qwen2.5:7b",
-  "inter_file_delay": 2
+  "inter_file_delay": 2,
+  "schedule": {
+    "inbox_scan_interval_minutes": 30,
+    "reminder_hour": 8,
+    "reminder_minute": 0,
+    "timezone": "UTC"
+  },
+  "notifications": {
+    "enabled": true,
+    "smtp_host": "smtp.gmail.com",
+    "smtp_port": 587,
+    "smtp_user": "hasanmahmudnayeem3027@gmail.com",
+    "smtp_password": "your-app-password-here",
+    "from_address": "hasanmahmudnayeem3027@gmail.com",
+    "to_addresses": ["hasanmahmudnayeem3027@gmail.com"],
+    "subject_prefix": "[RPA ALERT]"
+  }
 }

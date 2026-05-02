@@ -1,6 +1,6 @@
 {
-  "engine": "regex",
-  "api_key": "",
+  "engine": "gemini",
+  "api_key": "AIzaSyDPnskLk1M_40QgjnSGFBj8tkV0IrGaLfs",
   "ollama_model": "qwen2.5:7b",
   "inter_file_delay": 2,
   "schedule": {
@@ -16,7 +16,9 @@
     "smtp_user": "hasanmahmudnayeem3027@gmail.com",
     "smtp_password": "your-app-password-here",
     "from_address": "hasanmahmudnayeem3027@gmail.com",
-    "to_addresses": ["hasanmahmudnayeem3027@gmail.com"],
+    "to_addresses": [
+      "hasanmahmudnayeem3027@gmail.com"
+    ],
     "subject_prefix": "[RPA ALERT]"
   }
 }

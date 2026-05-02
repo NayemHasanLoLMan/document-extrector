@@ -23,6 +23,14 @@ except ImportError:
     print("pip install watchdog pypdf requests openpyxl google-generativeai")
     exit(1)
 
+# OCR pipeline for image-based / scanned PDFs
+try:
+    from ocr_extractor import extract_from_ocr_pdf
+    OCR_AVAILABLE = True
+except ImportError:
+    OCR_AVAILABLE = False
+    log_ocr_warn = True  # will warn once at runtime
+
 # ─── CONFIGURATION ────────────────────────────────────────────────────────────
 BASE_DIR       = Path(__file__).parent
 INBOX_DIR      = BASE_DIR / "Inbox"
@@ -847,17 +855,52 @@ def handle_new_file(file_path: Path):
                 currently_processing = None
             return
 
-        # ── Choose extraction method
-        if ENGINE == 'gemini':
+        # ── Choose extraction method (Smart Routing)
+        text = extract_text_from_pdf(file_path)
+        data = None
+
+        # 1. Always try fast regex parser first (SuperStore / linear format)
+        if text.strip() and len(text.strip()) > 30:
+            try:
+                temp_data = parse_invoice_regex(text)
+                if temp_data.get("reference_number") or temp_data.get("client_name"):
+                    data = temp_data
+                    log.info("  → Regex parser succeeded (linear format).")
+            except Exception:
+                pass
+
+        # 2. OCR pipeline for image-based / scanned PDFs (sparse or no pypdf text)
+        if not data and OCR_AVAILABLE:
+            log.info("  → pypdf text sparse/empty — switching to OCR pipeline…")
+            try:
+                data = extract_from_ocr_pdf(
+                    file_path,
+                    ollama_url=OLLAMA_URL,
+                    ollama_model=OLLAMA_MODEL,
+                )
+                if data.get("reference_number") or data.get("client_name") or data.get("total"):
+                    log.info("  → OCR extraction succeeded.")
+                else:
+                    log.warning("  → OCR produced no key fields.")
+                    data = None
+            except Exception as ocr_err:
+                log.warning(f"  → OCR pipeline error: {ocr_err}")
+                data = None
+
+        # 3. Fallback to Gemini (if API key configured)
+        if not data and GEMINI_API_KEY and len(GEMINI_API_KEY) > 10:
+            log.info("  → Falling back to Gemini API…")
             data = process_with_gemini(file_path)
-        elif ENGINE == 'ollama':
+
+        # 4. Fallback to Ollama text mode (if text is available)
+        elif not data and ENGINE == 'ollama' and text.strip():
+            log.info(f"  → Falling back to Ollama text mode ({OLLAMA_MODEL})…")
             data = process_with_ollama(file_path)
-        else:
-            # Default: pure regex parser (fastest, most accurate for SuperStore PDFs)
-            text = extract_text_from_pdf(file_path)
-            if not text.strip():
-                raise ValueError("No text extracted — is this a scanned image PDF?")
-            data = parse_invoice_regex(text)
+
+        # 5. Nothing worked
+        elif not data:
+            raise ValueError("Extraction failed: no text and OCR unavailable. "
+                             "Install easyocr+pymupdf or provide a Gemini API key.")
 
         append_to_database(file_path.name, data)
         update_excel_file()
